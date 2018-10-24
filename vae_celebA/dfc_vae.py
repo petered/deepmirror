@@ -6,13 +6,14 @@ from tensorlayer.layers import *
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-def encoder(input_imgs, is_train = True, reuse = False):
+def encoder(input_imgs, is_train = True, reuse = False, z_dim = 100):
     '''
     input_imgs: the input images to be encoded into a vector as latent representation. size here is [b_size,64,64,3]
     '''
-    z_dim = FLAGS.z_dim # 100
+    # z_dim = FLAGS.z_dim # 100
     ef_dim = 32 # encoder filter number
 
+    # with tf.device("/cpu:0"):
     w_init = tf.random_normal_initializer(stddev=0.02)
     gamma_init = tf.random_normal_initializer(1., 0.02)
 
@@ -68,16 +69,16 @@ def encoder(input_imgs, is_train = True, reuse = False):
 
     return net_out1, net_out2, z_mean, z_log_sigma_sq
 
-def generator(inputs, is_train = True, reuse = False):
+def generator(inputs, image_size, c_dim, batch_size, is_train = True, reuse = False):
     '''
     generator of GAN, which can also be seen as a decoder of VAE
     inputs: latent representation from encoder. [b_size,z_dim]
     '''
-    image_size = FLAGS.output_size # 64 the output size of generator
+    # image_size = FLAGS.output_size # 64 the output size of generator
     s2, s4, s8, s16 = int(image_size/2), int(image_size/4), int(image_size/8), int(image_size/16) # 32,16,8,4
     gf_dim = 32
-    c_dim = FLAGS.c_dim # n_color 3
-    batch_size = FLAGS.batch_size # 64
+    # c_dim = FLAGS.c_dim # n_color 3
+    # batch_size = FLAGS.batch_size # 64
 
     w_init = tf.random_normal_initializer(stddev=0.02)
     gamma_init = tf.random_normal_initializer(1., 0.02)
