@@ -44,7 +44,14 @@ def demo_decoder(n_steps=1000, step_size = 0.1, momentum_refreshment = 0.1):
         dbplot(im, 'image')
 
 
-def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.1, smooth=True, display_size=(224, 224), show_debug_plots=False):
+def momentum_sgd(energy_func, x, v, momentum, step_size):
+    gx, = tf.gradients(tf.reduce_sum(energy_func(x)), x)
+    v_new = v*momentum - step_size/2. * gx
+    x_new = x + v_new
+    return x_new, v_new
+
+
+def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, opposite=False):
 
     z_dim = 100
     c_dim=3
@@ -61,6 +68,7 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.1, 
 
     # Smooth update
     x_new, v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum((z-z_mean)**2/z_var, axis=1), x=pl_x, v=pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment)
+    # x_new, v_new = momentum_sgd(lambda z: 0.5 * tf.reduce_sum((z-z_mean)**2/z_var, axis=1), x=pl_x, v=pl_v, step_size=0.01, momentum=0.9)
 
     # Random update
     z_sample = tf.random_normal(shape=(1, z_dim), mean=z_mean, stddev=z_var**.5)
@@ -114,7 +122,7 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.1, 
         if bgr_im is not None:
             rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
 
-            faces = face_detector(rgb_im)
+            faces = face_detector(rgb_im)[:1]  # One face is enough for now!
 
             if len(faces)>0:
                 faces = faces/127.5-1.
@@ -123,6 +131,9 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.1, 
                 post_mean, post_var = prior_mean, prior_var
         else:
             post_mean, post_var = prior_mean, prior_var
+
+        if opposite:
+            post_mean = -post_mean
 
         if smooth:
             x, v = sess.run((x_new, v_new), {pl_x: x, pl_v: v, z_mean: post_mean, z_var: post_var})
@@ -141,10 +152,17 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.1, 
                 dbplot(im, 'image')
                 dbplot(im if bgr_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
         else:
-            cv2.imshow('mirror', cv2.resize(((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8), dsize=(800, 800)))
+            window_size = 1440, 900
+            if t==0:
+                cv2.namedWindow('mirror', cv2.WND_PROP_FULLSCREEN)
+                cv2.moveWindow('mirror', *window_size)
+                cv2.setWindowProperty('mirror',cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+                # cv2.namedWindow('image', flags=cv2.WINDOW_GUI_NORMAL)
+            # cv2.imshow('mirror', cv2.resize(((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8), dsize=(800, 800)))
+            cv2.imshow('mirror', ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8))
             cv2.waitKey(1)
 
 
 if __name__ == '__main__':
-    # demo_decoder()
-    demo_var_mirror()
+
+    demo_var_mirror(smooth=False, opposite = False)
