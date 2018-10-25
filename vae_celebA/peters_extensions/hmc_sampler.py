@@ -4,7 +4,7 @@ import numpy as np
 from artemis.plotting.db_plotting import dbplot
 
 
-def hmc_leapfrog_step(energy_func, x, v, step_size=0.1, momentum_refreshment = 0.):
+def hmc_leapfrog_step(energy_func, x, v, step_size=0.1, momentum_refreshment = 0., v_scale = 1.):
     """
     Note: incomplete as an MCMC sampler because there's no rejection step'
     See reference http://www.mcmchandbook.net/HandbookChapter5.pdf
@@ -20,7 +20,7 @@ def hmc_leapfrog_step(energy_func, x, v, step_size=0.1, momentum_refreshment = 0
     gx, = tf.gradients(tf.reduce_sum(energy_func(x_new)), x_new)
     v_new = v_half - step_size/2. * gx
 
-    v_new = (1-momentum_refreshment)*v_new + momentum_refreshment * tf.random_normal(shape=v.shape)
+    v_new = (1-momentum_refreshment)*v_new + momentum_refreshment * tf.random_normal(shape=v.shape) * v_scale
 
     return x_new, v_new
 

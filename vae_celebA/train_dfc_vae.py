@@ -28,8 +28,7 @@ def main(
         learning_rate=0.0005,
         beta1 = 0.5,
         train_size=np.inf,
-        # batch_size=64,
-        batch_size=4,  # TODO: Revert
+        batch_size=64,
         image_size=148,
         output_size=64,
         c_dim=3,
@@ -47,8 +46,7 @@ def main(
     tl.files.exists_or_mkdir(checkpoint_dir)
     tl.files.exists_or_mkdir(sample_dir)
 
-    # with tf.device("/gpu:0"):
-    with tf.device("/cpu:0"):  # TODO: Revert
+    with tf.device("/gpu:0"):
         ##========================= DEFINE MODEL ===========================##
         # the input_imgs are input for both encoder and discriminator
         input_imgs = tf.placeholder(tf.float32,[batch_size, output_size,
