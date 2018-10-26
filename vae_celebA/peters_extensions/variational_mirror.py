@@ -8,6 +8,7 @@ from vae_celebA.dfc_vae import encoder, generator
 from vae_celebA.image_utils.face_aligner import FaceAligner
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2
 from vae_celebA.image_utils.video_camera import VideoCamera
+from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen
 from vae_celebA.peters_extensions.hmc_sampler import hmc_leapfrog_step
 import cv2
 import itertools
@@ -54,7 +55,14 @@ def momentum_sgd(energy_func, x, v, momentum, step_size):
     return x_new, v_new
 
 
-def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, opposite=False, v_scale=2., camera_device_no=0, second_monitor=False):
+def multiply_gaussians(means, variances, axis=0, keepdims=True):
+    inverse_vars = 1./variances
+    new_var = 1./tf.reduce_sum(inverse_vars, axis=axis, keepdims=keepdims)
+    new_mean = new_var * tf.reduce_sum(inverse_vars*means, axis=axis, keepdims=keepdims)
+    return new_mean, new_var
+
+
+def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, opposite=False, v_scale=4., camera_device_no=0, second_monitor=False):
 
     z_dim = 100
     c_dim=3
@@ -84,9 +92,12 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
         g.full_img = tf.image.resize_images(g.gen0.outputs, display_size)
 
         # Setup Encoder
-        g.input_imgs = tf.placeholder(tf.float32,[batch_size, output_size, output_size, c_dim], name='real_images')
+        g.input_imgs = tf.placeholder(tf.float32,[None, output_size, output_size, c_dim], name='real_images')
         g.net_out1, g.net_out2, g.qz_mean, g.qz_log_sigma_sq = encoder(g.input_imgs, is_train=True, reuse=False, z_dim=z_dim)
         g.qz_var = tf.exp(g.qz_log_sigma_sq)
+
+        g.qz_mean_prod, g.qz_var_prod = multiply_gaussians(means=g.qz_mean, variances=g.qz_var, axis=0, keepdims=True)
+
 
     # Setup Session and load params
     sess = tf.InteractiveSession()
@@ -135,11 +146,12 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
             rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
 
             with EZProfiler('face_det'):
-                faces = face_detector(rgb_im)[:1]  # One face is enough for now!
+                faces = face_detector(rgb_im)
 
             if len(faces)>0:
                 faces = faces/127.5-1.
-                post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
+                post_mean, post_var = sess.run([g.qz_mean_prod, g.qz_var_prod], {g.input_imgs: faces})
+                # post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
             else:
                 post_mean, post_var = prior_mean, prior_var
         else:
@@ -168,18 +180,9 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
                 dbplot(im, 'image')
                 dbplot(im if bgr_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
         if show_display_plot:
-            if t==0:
-                cv2.namedWindow('mirror', cv2.WND_PROP_FULLSCREEN)
-                if second_monitor:
-                    window_size = 1440, 900
-                    cv2.moveWindow('mirror', *window_size)
-                cv2.setWindowProperty('mirror',cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
-                # cv2.namedWindow('image', flags=cv2.WINDOW_GUI_NORMAL)
-            # cv2.imshow('mirror', cv2.resize(((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8), dsize=(800, 800)))
-            cv2.imshow('mirror', ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8))
-            cv2.waitKey(1)
+            show_fullscreen(image = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8), background_colour=(0, 0, 0), display_sizes=[(1440, 900), (1920, 1080)])
 
 
 if __name__ == '__main__':
 
-    demo_var_mirror(smooth=True, opposite = False, show_debug_plots=False, show_display_plot=True, camera_device_no=0)
+    demo_var_mirror(smooth=True, opposite = False, show_debug_plots=True, show_display_plot=False, camera_device_no=0)

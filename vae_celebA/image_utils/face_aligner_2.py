@@ -57,7 +57,7 @@ def shape_to_np(shape, dtype="int"):
 
 class FaceAligner2:
 
-    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None):
+    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE):
         # store the facial landmark predictor, desired output left
         # eye position, and desired output face width + height
         # self.predictor = predictor
@@ -66,6 +66,7 @@ class FaceAligner2:
         self.desiredFaceWidth = desiredFaceWidth
         self.desiredFaceHeight = desiredFaceHeight
         self.desiredRightEye = desiredRightEye
+        self.border_mode = border_mode
 
         # if the desired face height is None, set it to be the
         # desired face width (normal behavior)
@@ -140,7 +141,7 @@ class FaceAligner2:
         # apply the affine transformation
         (w, h) = (self.desiredFaceWidth, self.desiredFaceHeight)
         output = cv2.warpAffine(image, M, (w, h),
-            flags=cv2.INTER_CUBIC)
+            flags=cv2.INTER_CUBIC, borderMode=self.border_mode)
 
         # return the aligned face
         return output
