@@ -82,10 +82,13 @@ class FaceAligner2:
             landmarks_per_face = face_recognition.face_landmarks(im, model=self.model)
 
         landmarks_per_face = sorted(landmarks_per_face, key = lambda x: x['left_eye'][0][0])
+
+
         ims = []
         for landmarks in landmarks_per_face:
             ims.append(self.align(im, landmarks))
-        return np.array(ims)
+        landmarks_per_face = [{k: np.array(v).copy() for k, v in landmarks.items()} for landmarks in landmarks_per_face]
+        return landmarks_per_face, np.array(ims)
 
 
     def align(self, image, landmarks):

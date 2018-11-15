@@ -6,12 +6,15 @@ __author__ = 'peter'
 #
 class VideoCamera(object):
 
-    def __init__(self, size = None, device=0):
+    def __init__(self, size = None, device=0, hflip=False, mode='bgr'):
         """
         :param size: Optionally, a 2-tuple of (width, height)
         :return:
         """
         self.camera = cv2.VideoCapture(device)
+        self.hflip = hflip
+        assert mode in ('rgb', 'bgr')
+        self.mode = mode
         if size is not None:
             width, height = size
             if cv2.__version__.startswith('2'):
@@ -39,6 +42,7 @@ class VideoCamera(object):
                 print("Missed Camera Frame for the %s'th time!" % (self._missed_frame_count, ))
                 time.sleep(missed_frame_sleep_time)
             else:
+                im = im[:, slice(None, None, -1) if self.hflip else slice(None), slice(None, None, -1) if self.mode=='rgb' else slice(None)]
                 yield im
 
 

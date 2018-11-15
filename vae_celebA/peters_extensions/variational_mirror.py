@@ -76,7 +76,7 @@ def add_fade_frame(img, frame_width=0.05, p_norm=2.):
     return bordered_image
 
 
-def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, show_camera_window=False, opposite=False, v_scale=4., camera_device_no=0, display_number=0, crop_frac=None):
+def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, show_camera_window=False, opposite=False, v_scale=4., camera_device_no=0, display_number=0, crop_frac=None, display_sizes=[(1440, 900), (1920, 1080)]):
 
     z_dim = 100
     c_dim=3
@@ -207,13 +207,16 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
             if show_display_plot:
                 face_img = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8)
                 # face_img=add_fade_frame(face_img, p_norm=1.2)
-                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=[(1440, 900), (1920, 1080)], display_number=display_number)
+
+                # cv2.imshow('face_img', face_img)
+
+                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
             if show_camera_window:
-                display_img = rgb_im[..., ::-1]
+                display_img = rgb_im[..., ::-1].copy()
 
                 for landmark in landmarks:
-                    cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                    cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    cv2.circle(display_img, tuple(landmark['left_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    cv2.circle(display_img, tuple(landmark['right_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
                 cv2.imshow('camera', display_img)
                 cv2.waitKey(1)
         if do_every('5s'):
@@ -223,7 +226,10 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
 
 if __name__ == '__main__':
 
-    OUTSIDE = True
+    OUTSIDE = False
+
+    display_sizes = [(1440, 900), (1920, 1080)]
+
     if OUTSIDE:
         crop_frac = [(.3, .7), (0, 1)]
         video_size = (640, 480)
@@ -240,5 +246,6 @@ if __name__ == '__main__':
         camera_device_no=0,
         video_size = video_size,
         crop_frac=crop_frac,
-        display_number=1
+        display_number=1,
+        display_sizes = display_sizes
         )
