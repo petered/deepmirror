@@ -6,6 +6,8 @@ import numpy as np
 import cv2
 import dlib
 
+from artemis.general.ezprofile import EZProfiler
+
 """
 Taken from the website of Adrian Rosebrock
 https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
@@ -21,43 +23,43 @@ import cv2
 # define a dictionary that maps the indexes of the facial
 # landmarks to specific face regions
 FACIAL_LANDMARKS_IDXS = OrderedDict([
-	("mouth", (48, 68)),
-	("right_eyebrow", (17, 22)),
-	("left_eyebrow", (22, 27)),
-	("right_eye", (36, 42)),
-	("left_eye", (42, 48)),
-	("nose", (27, 36)),
-	("jaw", (0, 17))
+    ("mouth", (48, 68)),
+    ("right_eyebrow", (17, 22)),
+    ("left_eyebrow", (22, 27)),
+    ("right_eye", (36, 42)),
+    ("left_eye", (42, 48)),
+    ("nose", (27, 36)),
+    ("jaw", (0, 17))
 ])
 
 def rect_to_bb(rect):
-	# take a bounding predicted by dlib and convert it
-	# to the format (x, y, w, h) as we would normally do
-	# with OpenCV
-	x = rect.left()
-	y = rect.top()
-	w = rect.right() - x
-	h = rect.bottom() - y
+    # take a bounding predicted by dlib and convert it
+    # to the format (x, y, w, h) as we would normally do
+    # with OpenCV
+    x = rect.left()
+    y = rect.top()
+    w = rect.right() - x
+    h = rect.bottom() - y
 
-	# return a tuple of (x, y, w, h)
-	return (x, y, w, h)
+    # return a tuple of (x, y, w, h)
+    return (x, y, w, h)
 
 def shape_to_np(shape, dtype="int"):
-	# initialize the list of (x, y)-coordinates
-	coords = np.zeros((68, 2), dtype=dtype)
+    # initialize the list of (x, y)-coordinates
+    coords = np.zeros((68, 2), dtype=dtype)
 
-	# loop over the 68 facial landmarks and convert them
-	# to a 2-tuple of (x, y)-coordinates
-	for i in range(0, 68):
-		coords[i] = (shape.part(i).x, shape.part(i).y)
+    # loop over the 68 facial landmarks and convert them
+    # to a 2-tuple of (x, y)-coordinates
+    for i in range(0, 68):
+        coords[i] = (shape.part(i).x, shape.part(i).y)
 
-	# return the list of (x, y)-coordinates
-	return coords
+    # return the list of (x, y)-coordinates
+    return coords
 
 
 class FaceAligner2:
 
-    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE):
+    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE, model='large'):
         # store the facial landmark predictor, desired output left
         # eye position, and desired output face width + height
         # self.predictor = predictor
@@ -67,6 +69,7 @@ class FaceAligner2:
         self.desiredFaceHeight = desiredFaceHeight
         self.desiredRightEye = desiredRightEye
         self.border_mode = border_mode
+        self.model = model
 
         # if the desired face height is None, set it to be the
         # desired face width (normal behavior)
@@ -75,7 +78,10 @@ class FaceAligner2:
 
     def __call__(self, im):
 
-        landmarks_per_face = face_recognition.face_landmarks(im, model='large')
+        with EZProfiler('landmark_det'):
+            landmarks_per_face = face_recognition.face_landmarks(im, model=self.model)
+
+        landmarks_per_face = sorted(landmarks_per_face, key = lambda x: x['left_eye'][0][0])
         ims = []
         for landmarks in landmarks_per_face:
             ims.append(self.align(im, landmarks))

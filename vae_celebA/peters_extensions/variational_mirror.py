@@ -1,19 +1,21 @@
+import itertools
+import os
+from argparse import Namespace
+import time
+import cv2
 import numpy as np
 import tensorflow as tf
 import tensorlayer as tl
-import os
-from artemis.fileman.file_getter import get_artemis_data_path, get_file
+
+from artemis.fileman.file_getter import get_file
+from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts
+from artemis.general.checkpoint_counter import do_every
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from vae_celebA.dfc_vae import encoder, generator
-from vae_celebA.image_utils.face_aligner import FaceAligner
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2
 from vae_celebA.image_utils.video_camera import VideoCamera
 from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen
 from vae_celebA.peters_extensions.hmc_sampler import hmc_leapfrog_step
-import cv2
-import itertools
-from argparse import Namespace
-from artemis.general.ezprofile import EZProfiler
 
 
 def demo_decoder(n_steps=1000, step_size = 0.1, momentum_refreshment = 0.1):
@@ -62,7 +64,19 @@ def multiply_gaussians(means, variances, axis=0, keepdims=True):
     return new_mean, new_var
 
 
-def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, opposite=False, v_scale=4., camera_device_no=0, second_monitor=False):
+def crop_by_fraction(im, vcrop, hcrop):
+    return im[int(vcrop[0]*im.shape[0]):int(vcrop[1]*im.shape[0]), int(hcrop[0]*im.shape[1]):int(hcrop[1]*im.shape[1])]
+
+
+def add_fade_frame(img, frame_width=0.05, p_norm=2.):
+
+    r = (np.sum(np.power(np.meshgrid(np.linspace(-1, 1, img.shape[0]), np.linspace(-1, 1, img.shape[1])), p_norm), axis=0))**(1./p_norm)
+    fade_mult = (np.minimum(1, np.maximum(0, (1-r)/frame_width)))[:, :, None]
+    bordered_image = (img*fade_mult).astype(np.uint8)
+    return bordered_image
+
+
+def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, show_camera_window=False, opposite=False, v_scale=4., camera_device_no=0, display_number=0, crop_frac=None):
 
     z_dim = 100
     c_dim=3
@@ -76,11 +90,12 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
         g.pl_v = tf.placeholder(tf.float32, shape=(1, z_dim))
 
         # var_v = tf.placeholder(tf.float32, shape=(1, z_dim))
-        g.z_mean = tf.placeholder(tf.float32, shape=(1, z_dim), name='z_mean')
-        g.z_var = tf.placeholder(tf.float32, shape=(1, z_dim), name='z_var')
+        g.z_mean = tf.placeholder(tf.float32, shape=(None, z_dim), name='z_mean')
+        g.z_var = tf.placeholder(tf.float32, shape=(None, z_dim), name='z_var')
 
         # Smooth update
-        g.x_new, g.v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), x=g.pl_x, v=g.pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment, v_scale = v_scale*tf.reduce_mean(g.z_var))
+        # g.x_new, g.v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), x=g.pl_x, v=g.pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment, v_scale = v_scale*tf.reduce_mean(g.z_var))
+        g.x_new, g.v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum(tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), axis=0, keepdims=True), x=g.pl_x, v=g.pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment, v_scale = v_scale*tf.reduce_mean(g.z_var))
         # g.x_new, g.v_new = momentum_sgd(lambda z: 0.5 * tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), x=pl_x, v=pl_v, step_size=0.01, momentum=0.9)
 
         # Random update
@@ -130,7 +145,7 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
     )
 
     # cam = VideoCamera(size=(640, 480))
-    cam = VideoCamera(size=(320, 240), device=camera_device_no)
+    cam = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb')
     prior_mean = np.zeros([1, z_dim])
     prior_var = np.ones([1, z_dim])
     x = np.random.randn(1, z_dim)
@@ -139,50 +154,91 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, momentum_refreshment = 0.2, 
     # Run
     # im = np.zeros((64, 64, 3))
     for t in range(n_steps) if n_steps is not None else itertools.count(0):
-        bgr_im = cam.read()
 
-        if bgr_im is not None:
+        with profile_context('total'):
+            rgb_im = cam.read()
 
-            rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
+            if crop_frac is not None:
+                rgb_im = crop_by_fraction(rgb_im, *crop_frac)
 
-            with EZProfiler('face_det'):
-                faces = face_detector(rgb_im)
+            if rgb_im is not None:
 
-            if len(faces)>0:
-                faces = faces/127.5-1.
-                post_mean, post_var = sess.run([g.qz_mean_prod, g.qz_var_prod], {g.input_imgs: faces})
-                # post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
-            else:
-                post_mean, post_var = prior_mean, prior_var
-        else:
-            print('No Camera Image!')
+                # rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
+                # rgb_im = bgr_im[..., ::-1, :]  # Flip for mirror effect
 
-            post_mean, post_var = prior_mean, prior_var
+                with profile_context('detection'):
+                    # faces = face_detector(rgb_im)
+                    landmarks, faces = face_detector(rgb_im)
 
-        if opposite:
-            post_mean = -post_mean
-
-        if smooth:
-            x, v = sess.run((g.x_new, g.v_new), {g.pl_x: x, g.pl_v: v, g.z_mean: post_mean, g.z_var: post_var})
-            z_points = x
-        else:
-            z_points = sess.run(g.z_sample, {g.z_mean: post_mean, g.z_var: post_var})
-
-        with EZProfiler('generation'):
-            im = sess.run(g.full_img, {g.z_p: z_points})
-
-        if show_debug_plots:
-            with hold_dbplots():
-                if bgr_im is not None:
-                    dbplot(rgb_im, 'im')
+                with profile_context('inference'):
                     if len(faces)>0:
-                        dbplot(faces, 'faces')
-                dbplot(im, 'image')
-                dbplot(im if bgr_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
-        if show_display_plot:
-            show_fullscreen(image = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8), background_colour=(0, 0, 0), display_sizes=[(1440, 900), (1920, 1080)])
+                        faces = faces[[int(time.time()//10)%len(faces)]]  # Optional
+                        faces = faces/127.5-1.
+                        # post_mean, post_var = sess.run([g.qz_mean_prod, g.qz_var_prod], {g.input_imgs: faces})
+                        post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
+                    else:
+                        post_mean, post_var = prior_mean, prior_var
+            else:
+                landmarks, faces = [], []
+                print('No Camera Image!')
+
+                post_mean, post_var = prior_mean, prior_var
+
+            if opposite:
+                post_mean = -post_mean
+
+            if smooth:
+                x, v = sess.run((g.x_new, g.v_new), {g.pl_x: x, g.pl_v: v, g.z_mean: post_mean, g.z_var: post_var})
+                z_points = x
+            else:
+                z_points = sess.run(g.z_sample, {g.z_mean: post_mean, g.z_var: post_var})
+
+            with profile_context('generation'):
+                im = sess.run(g.full_img, {g.z_p: z_points})
+
+            if show_debug_plots:
+                with hold_dbplots():
+                    if rgb_im is not None:
+                        dbplot(rgb_im, 'im')
+                        if len(faces)>0:
+                            dbplot(faces, 'faces')
+                    dbplot(im, 'image')
+                    dbplot(im if rgb_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
+            if show_display_plot:
+                face_img = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8)
+                # face_img=add_fade_frame(face_img, p_norm=1.2)
+                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=[(1440, 900), (1920, 1080)], display_number=display_number)
+            if show_camera_window:
+                display_img = rgb_im[..., ::-1]
+
+                for landmark in landmarks:
+                    cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                cv2.imshow('camera', display_img)
+                cv2.waitKey(1)
+        if do_every('5s'):
+            profile = get_profile_contexts(['total', 'detection', 'generation', 'inference'], fill_empty_with_zero=True)
+            print(f'Mean Times:: Total: {profile["total"][1]/profile["total"][0]:.3g}, Detection: {profile["detection"][1]/profile["detection"][0]:.3g}, Inference: {profile["inference"][1]/profile["inference"][0]:.3g}, Generation: {profile["generation"][1]/profile["generation"][0]:.3g}')
 
 
 if __name__ == '__main__':
 
-    demo_var_mirror(smooth=True, opposite = False, show_debug_plots=True, show_display_plot=False, camera_device_no=0)
+    OUTSIDE = True
+    if OUTSIDE:
+        crop_frac = [(.3, .7), (0, 1)]
+        video_size = (640, 480)
+    else:
+        crop_frac = None
+        video_size = (320, 240)
+
+    demo_var_mirror(
+        smooth=True,
+        opposite = False,
+        show_debug_plots=False,
+        show_display_plot=True,
+        show_camera_window=True,
+        camera_device_no=0,
+        video_size = video_size,
+        crop_frac=crop_frac,
+        display_number=1
+        )
