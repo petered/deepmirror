@@ -31,8 +31,10 @@ class VideoCamera(object):
         Read the image
         :return: Either a (size_y, size_x, 3) ndarray containing the BGR image, or None if the image cannot be read.
         """
-        retval, bgr_im = self.camera.read()
-        return bgr_im
+        retval, im = self.camera.read()
+        if im is not None:
+            im = im[:, slice(None, None, -1) if self.hflip else slice(None), slice(None, None, -1) if self.mode == 'rgb' else slice(None)]
+        return im
 
     def iterator(self, missed_frame_sleep_time = 0.1):
         while True:
@@ -42,7 +44,6 @@ class VideoCamera(object):
                 print("Missed Camera Frame for the %s'th time!" % (self._missed_frame_count, ))
                 time.sleep(missed_frame_sleep_time)
             else:
-                im = im[:, slice(None, None, -1) if self.hflip else slice(None), slice(None, None, -1) if self.mode=='rgb' else slice(None)]
                 yield im
 
 
@@ -88,3 +89,12 @@ class VideoCamera(object):
 #             else:
 #                 last_im = im
 
+
+if __name__ == '__main__':
+
+    cam = VideoCamera(device=0)
+    while True:
+        im = cam.read()
+        if im is not None:
+            cv2.imshow('camera', im)
+            cv2.waitKey(1)

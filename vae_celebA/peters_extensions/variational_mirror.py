@@ -158,10 +158,14 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
         with profile_context('total'):
             rgb_im = cam.read()
 
-            if crop_frac is not None:
-                rgb_im = crop_by_fraction(rgb_im, *crop_frac)
+            if rgb_im is None:
+                print('No Camera Image')
+                time.sleep(0.1)
+                continue
 
             if rgb_im is not None:
+                if crop_frac is not None:
+                    rgb_im = crop_by_fraction(rgb_im, *crop_frac)
 
                 # rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
                 # rgb_im = bgr_im[..., ::-1, :]  # Flip for mirror effect
@@ -246,6 +250,6 @@ if __name__ == '__main__':
         camera_device_no=0,
         video_size = video_size,
         crop_frac=crop_frac,
-        display_number=1,
+        display_number=0,
         display_sizes = display_sizes
         )
