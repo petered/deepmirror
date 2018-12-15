@@ -232,7 +232,7 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
 
 if __name__ == '__main__':
 
-    OUTSIDE = False
+    OUTSIDE = True
 
     display_sizes = [(1440, 900), (1920, 1080)]
 
