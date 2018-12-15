@@ -14,7 +14,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from vae_celebA.dfc_vae import encoder, generator
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2
 from vae_celebA.image_utils.video_camera import VideoCamera
-from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen
+from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen, show_fullscreen_v1
 from vae_celebA.peters_extensions.hmc_sampler import hmc_leapfrog_step
 
 
@@ -172,11 +172,11 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
 
                 with profile_context('detection'):
                     # faces = face_detector(rgb_im)
-                    landmarks, faces = face_detector(rgb_im)
+                    landmarks, raw_faces = face_detector(rgb_im)
 
                 with profile_context('inference'):
-                    if len(faces)>0:
-                        faces = faces[[int(time.time()//10)%len(faces)]]  # Optional
+                    if len(raw_faces)>0:
+                        faces = raw_faces[[int(time.time()//10)%len(raw_faces)]]  # Optional
                         faces = faces/127.5-1.
                         # post_mean, post_var = sess.run([g.qz_mean_prod, g.qz_var_prod], {g.input_imgs: faces})
                         post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
@@ -214,13 +214,15 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
 
                 # cv2.imshow('face_img', face_img)
 
-                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
+                show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
             if show_camera_window:
                 display_img = rgb_im[..., ::-1].copy()
 
-                for landmark in landmarks:
+                for landmark, face in zip(landmarks, raw_faces):
                     cv2.circle(display_img, tuple(landmark['left_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
                     cv2.circle(display_img, tuple(landmark['right_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
+
                 cv2.imshow('camera', display_img)
                 cv2.waitKey(1)
         if do_every('5s'):
