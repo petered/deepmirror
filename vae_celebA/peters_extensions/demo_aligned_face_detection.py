@@ -1,5 +1,5 @@
 import face_recognition
-from future.moves import itertools
+import itertools
 
 from artemis.general.global_rates import measure_global_rate
 from vae_celebA.image_utils.face_aligner import FaceAligner
