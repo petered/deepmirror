@@ -6,12 +6,15 @@ __author__ = 'peter'
 #
 class VideoCamera(object):
 
-    def __init__(self, size = None, device=0):
+    def __init__(self, size = None, device=0, hflip=False, mode='bgr'):
         """
         :param size: Optionally, a 2-tuple of (width, height)
         :return:
         """
         self.camera = cv2.VideoCapture(device)
+        assert mode in ('rgb', 'bgr')
+        self.mode = mode
+        self.hflip = hflip
         if size is not None:
             width, height = size
             if cv2.__version__.startswith('2'):
@@ -29,7 +32,8 @@ class VideoCamera(object):
         :return: Either a (size_y, size_x, 3) ndarray containing the BGR image, or None if the image cannot be read.
         """
         retval, bgr_im = self.camera.read()
-        return bgr_im
+
+        return bgr_im if bgr_im is None or self.mode=='bgr' else bgr_im[:, slice(None) if self.hflip else slice(None, None, -1), ::-1]
 
     def iterator(self, missed_frame_sleep_time = 0.1):
         while True:

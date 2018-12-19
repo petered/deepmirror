@@ -1,10 +1,14 @@
 
 
 # import the necessary packages
+from typing import NamedTuple, Tuple, Sequence
+
 import face_recognition
 import numpy as np
 import cv2
 import dlib
+
+from artemis.general.ezprofile import EZProfiler
 
 """
 Taken from the website of Adrian Rosebrock
@@ -55,9 +59,24 @@ def shape_to_np(shape, dtype="int"):
 	return coords
 
 
+class FaceLandmarks(NamedTuple):
+    """
+    Each is an (n_points, 2) array of (x, y) locations.
+    """
+    nose_tip: np.ndarray
+    left_eye: np.ndarray
+    right_eye: np.ndarray
+    chin: np.ndarray = None
+    left_eyebrow: np.ndarray = None
+    right_eyebrow: np.ndarray = None
+    nose_bridge: np.ndarray = None
+    top_lip: np.ndarray = None
+    bottom_lip: np.ndarray = None
+
+
 class FaceAligner2:
 
-    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE):
+    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE, model='large'):
         # store the facial landmark predictor, desired output left
         # eye position, and desired output face width + height
         # self.predictor = predictor
@@ -67,22 +86,26 @@ class FaceAligner2:
         self.desiredFaceHeight = desiredFaceHeight
         self.desiredRightEye = desiredRightEye
         self.border_mode = border_mode
+        self.model = model
 
         # if the desired face height is None, set it to be the
         # desired face width (normal behavior)
         if self.desiredFaceHeight is None:
             self.desiredFaceHeight = self.desiredFaceWidth
 
-    def __call__(self, im):
+    def __call__(self, im: np.ndarray) -> Tuple[Sequence[FaceLandmarks], np.ndarray]:
 
-        landmarks_per_face = face_recognition.face_landmarks(im, model='large')
+        with EZProfiler('landmark_det'):
+            landmark_dicts = face_recognition.face_landmarks(im, model=self.model)
+        landmarks_per_face = [FaceLandmarks(**{k: np.array(v) for k, v in d.items()}) for d in landmark_dicts]
+
+        landmarks_per_face = sorted(landmarks_per_face, key = lambda x: x.left_eye[0][0])
         ims = []
         for landmarks in landmarks_per_face:
             ims.append(self.align(im, landmarks))
-        return np.array(ims)
+        return landmarks_per_face, np.array(ims)
 
-
-    def align(self, image, landmarks):
+    def align(self, image, landmarks: FaceLandmarks):
         #
         # # convert the landmark (x, y)-coordinates to a NumPy array
         # shape = self.predictor(gray, rect)
@@ -100,8 +123,8 @@ class FaceAligner2:
 
         # leftEyeCenter = np.mean(landmarks['left_eye'], axis=0).astype("int")
         # rightEyeCenter = np.mean(landmarks['right_eye'], axis=0).astype("int")
-        leftEyeCenter = np.mean(landmarks['left_eye'], axis=0)
-        rightEyeCenter = np.mean(landmarks['right_eye'], axis=0)
+        leftEyeCenter = np.mean(landmarks.left_eye, axis=0)
+        rightEyeCenter = np.mean(landmarks.right_eye, axis=0)
 
         # leftEyeCenter[1] = image.shape[0] - leftEyeCenter[1]
         # rightEyeCenter[1] = image.shape[0] - rightEyeCenter[1]

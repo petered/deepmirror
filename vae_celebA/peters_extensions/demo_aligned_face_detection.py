@@ -72,9 +72,9 @@ def define_eye_positions(n_pics=10):
     print(f'Mean Position: Left: {np.mean(left, axis=0)}±{np.std(left, axis=0)}, Right: {np.mean(right, axis=0)}+{np.std(left, axis=0)}')
 
 
-def demo_aligned_face_detection_2():
+def demo_aligned_face_detection_2(camera_device_no = 0, camera_size=(320, 240), model='large'):
 
-    cam = VideoCamera(size=(320, 180))
+    cam = VideoCamera(size=camera_size, device=camera_device_no)
     # cam = VideoCamera(size=(640, 480))
     i=0
     sample_pic = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i//10+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
@@ -85,11 +85,11 @@ def demo_aligned_face_detection_2():
         desiredRightEye = [0.62294991, 0.52083333],
         desiredFaceWidth=sample_pic.shape[1],
         desiredFaceHeight=sample_pic.shape[0],
+        model = model,
     )
 
     for i in itertools.count(0):
         sample_pic = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i//10+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
-
 
         with hold_dbplots():
             dbplot(sample_pic, 'sample_pic')
@@ -104,7 +104,7 @@ def demo_aligned_face_detection_2():
                 #     landmarks = face_recognition.face_landmarks(rgb_im)
 
                 with EZProfiler('alignment'):
-                    faces = face_detector(rgb_im)
+                    landmarks, faces = face_detector(rgb_im)
                 # print(f'Mean Rate: {measure_global_rate("XX"):.3g}iter/s')
 
                 # faces = face_detector(rgb_im)
@@ -122,4 +122,4 @@ def demo_aligned_face_detection_2():
 
 if __name__ == '__main__':
     # define_eye_positions(n_pics=100)
-    demo_aligned_face_detection_2()
+    demo_aligned_face_detection_2(camera_device_no=0, camera_size = (640, 480), model='large')
