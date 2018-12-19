@@ -76,7 +76,39 @@ def add_fade_frame(img, frame_width=0.05, p_norm=2.):
     return bordered_image
 
 
-def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), momentum_refreshment = 0.2, smooth=True, display_size=(224, 224), show_debug_plots=False, show_display_plot=False, show_camera_window=False, opposite=False, v_scale=4., camera_device_no=0, display_number=0, crop_frac=None, display_sizes=[(1440, 900), (1920, 1080)]):
+def correct_gamma(img, gamma = 3.):
+    table = (((np.arange(0, 256)/255.0)**(1/gamma))*255).astype(np.uint8)
+    return cv2.LUT(img, table)
+
+
+def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
+    lab= cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    return final
+
+
+def demo_var_mirror(
+        n_steps=None,
+        step_size = 0.05,
+        video_size = (320, 240),
+        momentum_refreshment = 0.2,
+        smooth=True,
+        display_size=(224, 224),
+        show_debug_plots=False,
+        show_display_plot=False,
+        show_camera_window=False,
+        opposite=False,
+        v_scale=4.,
+        camera_device_no=0,
+        display_number=0,
+        crop_frac=None,
+        display_sizes=[(1440, 900), (1920, 1080)],
+        do_brightness_equalization = True,
+        ):
 
     z_dim = 100
     c_dim=3
@@ -164,8 +196,12 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
                 continue
 
             if rgb_im is not None:
+
                 if crop_frac is not None:
                     rgb_im = crop_by_fraction(rgb_im, *crop_frac)
+
+                if do_brightness_equalization:
+                    rgb_im = correct_gamma(rgb_im)
 
                 # rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
                 # rgb_im = bgr_im[..., ::-1, :]  # Flip for mirror effect
@@ -219,8 +255,8 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
                 display_img = rgb_im[..., ::-1].copy()
 
                 for landmark, face in zip(landmarks, raw_faces):
-                    cv2.circle(display_img, tuple(landmark['left_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                    cv2.circle(display_img, tuple(landmark['right_eye'].mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                    cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
                     display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
 
                 cv2.imshow('camera', display_img)
@@ -232,8 +268,7 @@ def demo_var_mirror(n_steps=None, step_size = 0.05, video_size = (320, 240), mom
 
 if __name__ == '__main__':
 
-    OUTSIDE = True
-
+    OUTSIDE = False
     display_sizes = [(1440, 900), (1920, 1080)]
 
     if OUTSIDE:
@@ -253,5 +288,6 @@ if __name__ == '__main__':
         video_size = video_size,
         crop_frac=crop_frac,
         display_number=0,
-        display_sizes = display_sizes
+        display_sizes = display_sizes,
+        do_brightness_equalization=True
         )
