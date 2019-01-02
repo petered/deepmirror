@@ -1,18 +1,21 @@
-import itertools
 import os
 from argparse import Namespace
 import time
+from functools import partial
+from multiprocessing import set_start_method
+
 import cv2
 import numpy as np
 import tensorflow as tf
 import tensorlayer as tl
 
 from artemis.fileman.file_getter import get_file
+from artemis.general.async import iter_latest_asynchonously
 from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts
 from artemis.general.checkpoint_counter import do_every
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from vae_celebA.dfc_vae import encoder, generator
-from vae_celebA.image_utils.face_aligner_2 import FaceAligner2
+from vae_celebA.image_utils.face_aligner_2 import FaceAligner2, face_aligning_iterator, display_face_aligner
 from vae_celebA.image_utils.video_camera import VideoCamera
 from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen, show_fullscreen_v1
 from vae_celebA.peters_extensions.hmc_sampler import hmc_leapfrog_step
@@ -91,6 +94,17 @@ def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
     return final
 
 
+def preprocess_image(im, crop_frac = None, gamma = None):
+
+    if crop_frac is not None:
+        im = crop_by_fraction(im, *crop_frac)
+
+    if gamma is not None:
+        im = correct_gamma(im, gamma=gamma)
+
+    return im
+
+
 def demo_var_mirror(
         n_steps=None,
         step_size = 0.05,
@@ -114,6 +128,7 @@ def demo_var_mirror(
     c_dim=3
     batch_size=1
     output_size=64
+
 
     # Setup HMC
     with tf.device("/cpu:0"):
@@ -177,39 +192,40 @@ def demo_var_mirror(
     )
 
     # cam = VideoCamera(size=(640, 480))
-    cam = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb')
+    # cam = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb')
     prior_mean = np.zeros([1, z_dim])
     prior_var = np.ones([1, z_dim])
     x = np.random.randn(1, z_dim)
     v = np.random.randn(1, z_dim)*0
 
+    # iterator = face_aligning_iterator(
+    #     camera = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb'),
+    #     face_aligner=face_detector,
+    #     image_preprocessor=partial(preprocess_image, crop_frac=crop_frac, gamma = 3 if do_brightness_equalization else None)
+    # )
+
+    iterator = iter_latest_asynchonously(
+        gen_func = partial(
+            face_aligning_iterator,
+            camera = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb'),
+            face_aligner=face_detector,
+            image_preprocessor=partial(preprocess_image, crop_frac=crop_frac, gamma = 3 if do_brightness_equalization else None)
+            ),
+        empty_value=(None, [], []),
+        uninitialized_wait=0.1,
+        # use_forkserver = True,
+    )
+
     # Run
     # im = np.zeros((64, 64, 3))
-    for t in range(n_steps) if n_steps is not None else itertools.count(0):
+    for t, (rgb_im, landmarks, raw_faces) in enumerate(iterator):
 
         with profile_context('total'):
-            rgb_im = cam.read()
-
             if rgb_im is None:
-                print('No Camera Image')
+                print('No Camera Imageasss')
                 time.sleep(0.1)
                 continue
-
-            if rgb_im is not None:
-
-                if crop_frac is not None:
-                    rgb_im = crop_by_fraction(rgb_im, *crop_frac)
-
-                if do_brightness_equalization:
-                    rgb_im = correct_gamma(rgb_im)
-
-                # rgb_im = bgr_im[..., ::-1, ::-1]  # Flip for mirror effect
-                # rgb_im = bgr_im[..., ::-1, :]  # Flip for mirror effect
-
-                with profile_context('detection'):
-                    # faces = face_detector(rgb_im)
-                    landmarks, raw_faces = face_detector(rgb_im)
-
+            else:
                 with profile_context('inference'):
                     if len(raw_faces)>0:
                         faces = raw_faces[[int(time.time()//10)%len(raw_faces)]]  # Optional
@@ -218,11 +234,6 @@ def demo_var_mirror(
                         post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
                     else:
                         post_mean, post_var = prior_mean, prior_var
-            else:
-                landmarks, faces = [], []
-                print('No Camera Image!')
-
-                post_mean, post_var = prior_mean, prior_var
 
             if opposite:
                 post_mean = -post_mean
@@ -253,21 +264,30 @@ def demo_var_mirror(
                 # show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
                 show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
             if show_camera_window:
-                display_img = rgb_im[..., ::-1].copy()
+                display_face_aligner(rgb_im=rgb_im, landmarks=landmarks, faces=faces)
 
-                for landmark, face in zip(landmarks, raw_faces):
-                    cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                    cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                    display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
-
-                cv2.imshow('camera', display_img)
-                cv2.waitKey(1)
+                # display_img = rgb_im[..., ::-1].copy()
+                #
+                # for landmark, face in zip(landmarks, raw_faces):
+                #     cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                #     cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+                #     display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
+                #
+                # cv2.imshow('camera', display_img)
+                # cv2.waitKey(1)
         if do_every('5s'):
-            profile = get_profile_contexts(['total', 'detection', 'generation', 'inference'], fill_empty_with_zero=True)
-            print(f'Mean Times:: Total: {profile["total"][1]/profile["total"][0]:.3g}, Detection: {profile["detection"][1]/profile["detection"][0]:.3g}, Inference: {profile["inference"][1]/profile["inference"][0]:.3g}, Generation: {profile["generation"][1]/profile["generation"][0]:.3g}')
+            profile = get_profile_contexts(['total', 'generation', 'inference'], fill_empty_with_zero=True)
+            print(profile)
+            print(f'Mean Times:: Total: {profile["total"][1]/profile["total"][0]:.3g}, Inference: {profile["inference"][1]/profile["inference"][0]:.3g}, Generation: {profile["generation"][1]/profile["generation"][0]:.3g}')
 
 
 if __name__ == '__main__':
+
+    # try:
+    #     set_start_method('forkserver')
+    # except RuntimeError:
+    #     pass
+    set_start_method('forkserver', force=True)
 
     OUTSIDE = False
     display_sizes = [(1440, 900), (1920, 1080)]

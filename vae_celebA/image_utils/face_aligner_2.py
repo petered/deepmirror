@@ -1,12 +1,15 @@
 
 
 # import the necessary packages
+from time import time
 from typing import NamedTuple, Tuple, Sequence
 
 import face_recognition
 import numpy as np
 import cv2
 import dlib
+
+from vae_celebA.image_utils.video_camera import VideoCamera
 
 """
 Taken from the website of Adrian Rosebrock
@@ -100,7 +103,7 @@ class FaceAligner2:
         ims = []
         for landmarks in landmarks_per_face:
             ims.append(self.align(im, landmarks))
-        return landmarks_per_face, np.array(ims)
+        return landmarks_per_face, np.array(ims) if len(ims)>0 else np.zeros((0, self.desiredFaceHeight, self.desiredFaceWidth, 3))
 
     def align(self, image, landmarks: FaceLandmarks):
         #
@@ -165,3 +168,80 @@ class FaceAligner2:
 
         # return the aligned face
         return output
+
+
+
+
+def crop_by_fraction(im, vcrop, hcrop):
+    return im[int(vcrop[0]*im.shape[0]):int(vcrop[1]*im.shape[0]), int(hcrop[0]*im.shape[1]):int(hcrop[1]*im.shape[1])]
+
+
+def add_fade_frame(img, frame_width=0.05, p_norm=2.):
+
+    r = (np.sum(np.power(np.meshgrid(np.linspace(-1, 1, img.shape[0]), np.linspace(-1, 1, img.shape[1])), p_norm), axis=0))**(1./p_norm)
+    fade_mult = (np.minimum(1, np.maximum(0, (1-r)/frame_width)))[:, :, None]
+    bordered_image = (img*fade_mult).astype(np.uint8)
+    return bordered_image
+
+
+def correct_gamma(img, gamma = 3.):
+    table = (((np.arange(0, 256)/255.0)**(1/gamma))*255).astype(np.uint8)
+    return cv2.LUT(img, table)
+
+
+def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
+    lab= cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    return final
+
+
+def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor=None):
+
+    for im in camera.iterator():
+        print('Here')
+        if im is None:
+            yield None, None, None
+        else:
+            print('Image')
+            if image_preprocessor is not None:
+                im = image_preprocessor(im)
+            landmarks, faces = face_aligner(im)
+            yield im, landmarks, faces
+
+
+def display_face_aligner(rgb_im, landmarks, faces, text=None):
+    display_img = rgb_im[..., ::-1].copy()
+
+    for landmark, face in zip(landmarks, faces):
+        cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+        cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
+        display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
+    if text is not None:
+        cv2.putText(display_img, text, (20, 20), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 0))
+    cv2.imshow('camera', display_img)
+    cv2.waitKey(1)
+
+# def faces_generator(face_aligner: FaceAligner2, lock, namespace):
+#
+#     while True:
+#         with lock:
+#             image = namespace.image
+#         landmarks, faces = face_aligner(image)
+#         with lock:
+#             namespace.imfaces = landmarks, faces
+
+#
+# def async_face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor):
+#
+#     m = Manager()
+#     namespace = m.Namespace()
+#
+#     lock = Lock()
+#
+#
+#
+#     for im in camera.iterator():

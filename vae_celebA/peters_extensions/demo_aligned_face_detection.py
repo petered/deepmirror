@@ -1,9 +1,12 @@
+from functools import partial
+
 import face_recognition
 import itertools
 
+from artemis.general.async import iter_latest_asynchonously
 from artemis.general.global_rates import measure_global_rate
 from vae_celebA.image_utils.face_aligner import FaceAligner
-from vae_celebA.image_utils.face_aligner_2 import FaceAligner2
+from vae_celebA.image_utils.face_aligner_2 import FaceAligner2, face_aligning_iterator, display_face_aligner
 from vae_celebA.utils import get_image
 
 __author__ = 'peter'
@@ -13,7 +16,6 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from artemis.fileman.smart_io import smart_load_image
 from vae_celebA.image_utils.video_camera import VideoCamera
 from artemis.fileman.file_getter import get_artemis_data_path
-from artemis.general.global_rates import measure_global_rate
 import itertools
 from artemis.general.ezprofile import EZProfiler
 
@@ -120,6 +122,75 @@ def demo_aligned_face_detection_2(camera_device_no = 0, camera_size=(320, 240), 
                 time.sleep(0.1)
 
 
+
+def demo_aligned_face_detection_simple(camera_device_no = 0, camera_size=(320, 240), face_size=(64, 64), model='large'):
+
+    cam = VideoCamera(size=camera_size, device=camera_device_no)
+    # cam = VideoCamera(size=(640, 480))
+    i=0
+
+    face_width, face_height = face_size
+    face_detector = FaceAligner2(
+        desiredLeftEye = [0.35954122, 0.51964207],
+        desiredRightEye = [0.62294991, 0.52083333],
+        desiredFaceWidth=face_width,
+        desiredFaceHeight=face_height,
+        model = model,
+    )
+
+    for i in itertools.count(0):
+        with hold_dbplots():
+            bgr_im = cam.read()
+            if bgr_im is not None:
+                rgb_im = bgr_im[..., ::-1]
+
+                with EZProfiler('alignment'):
+                    landmarks, faces = face_detector(rgb_im)
+
+                dbplot(rgb_im, 'You')
+
+                dbplot(faces if len(faces)>0 else np.zeros((1, )+faces.shape[1:], dtype=np.uint8), 'Detected Faces')
+            else:
+                print('Camera Framed Dropped!')
+                time.sleep(0.1)
+
+
+
+def demo_face_aligner_iterator(async=False):
+
+    face_aligner=FaceAligner2(
+        desiredLeftEye = [0.35954122, 0.51964207],
+        desiredRightEye = [0.62294991, 0.52083333],
+        desiredFaceWidth=64,
+        desiredFaceHeight=64,
+        model = 'large',
+        )
+    camera = VideoCamera(size=(640, 480), mode='rgb')
+
+    if async:
+        iterator = iter_latest_asynchonously(
+            gen_func = partial(face_aligning_iterator, face_aligner=face_aligner, camera=camera), empty_value=(None, None, None),
+            use_forkserver=True,
+            uninitialized_wait=0.1
+        )
+    else:
+        iterator = face_aligning_iterator(face_aligner=face_aligner, camera=camera)
+
+    for t, (img, landmarks, faces) in enumerate(iterator):
+        if img is None:
+            print('No Camera Image')
+            time.sleep(0.1)
+            continue
+
+        display_face_aligner(img, landmarks, faces, text = f't={t}: {len(landmarks)} Faces')
+
+        # dbplot(img, 'You', cornertext=f't={t}')
+        # dbplot(faces if len(faces)>0 else np.zeros((1, )+faces.shape[1:], dtype=np.uint8), 'Detected Faces')
+
+
+
 if __name__ == '__main__':
     # define_eye_positions(n_pics=100)
-    demo_aligned_face_detection_2(camera_device_no=0, camera_size = (640, 480), model='large')
+    # demo_aligned_face_detection_2(camera_device_no=0, camera_size = (640, 480), model='large')
+    # demo_aligned_face_detection_simple(camera_device_no=0, camera_size = (640, 480), model='large')
+    demo_face_aligner_iterator()

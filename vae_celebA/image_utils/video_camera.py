@@ -11,26 +11,34 @@ class VideoCamera(object):
         :param size: Optionally, a 2-tuple of (width, height)
         :return:
         """
-        self.camera = cv2.VideoCapture(device)
+        self.camera = None
+        self.device = device
+
         self.hflip = hflip
         assert mode in ('rgb', 'bgr')
         self.mode = mode
-        if size is not None:
-            width, height = size
+        self.size = size
+        self._missed_frame_count = 0
+
+    def _initialize(self):
+        self.camera = cv2.VideoCapture(self.device)
+        if self.size is not None:
+            width, height = self.size
             if cv2.__version__.startswith('2'):
                 self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, width)
                 self.camera.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, height)
-
             elif cv2.__version__.startswith('3'):
                 self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
                 self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self._missed_frame_count = 0
 
     def read(self):
         """
         Read the image
         :return: Either a (size_y, size_x, 3) ndarray containing the BGR image, or None if the image cannot be read.
         """
+        if self.camera is None:
+            self._initialize()
+
         retval, im = self.camera.read()
         if im is not None:
             im = im[:, slice(None, None, -1) if self.hflip else slice(None), slice(None, None, -1) if self.mode == 'rgb' else slice(None)]
@@ -44,6 +52,7 @@ class VideoCamera(object):
                 print("Missed Camera Frame for the %s'th time!" % (self._missed_frame_count, ))
                 time.sleep(missed_frame_sleep_time)
             else:
+                print('Yielding Im')
                 yield im
 
 
@@ -98,3 +107,5 @@ if __name__ == '__main__':
         if im is not None:
             cv2.imshow('camera', im)
             cv2.waitKey(1)
+        else:
+            print('No Camera Image')
