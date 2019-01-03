@@ -13,6 +13,7 @@ from artemis.fileman.file_getter import get_file
 from artemis.general.async import iter_latest_asynchonously
 from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts
 from artemis.general.checkpoint_counter import do_every
+from artemis.general.global_rates import limit_rate, limit_iteration_rate
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from vae_celebA.dfc_vae import encoder, generator
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2, face_aligning_iterator, display_face_aligner
@@ -106,7 +107,6 @@ def preprocess_image(im, crop_frac = None, gamma = None):
 
 
 def demo_var_mirror(
-        n_steps=None,
         step_size = 0.05,
         video_size = (320, 240),
         momentum_refreshment = 0.2,
@@ -120,15 +120,17 @@ def demo_var_mirror(
         camera_device_no=0,
         display_number=0,
         crop_frac=None,
+        multiface_rotation_time = 7,
         display_sizes=[(1440, 900), (1920, 1080)],
-        do_brightness_equalization = True,
+        gamma_correction = 2,
+        max_fps = 24,
+        async = True
         ):
 
     z_dim = 100
     c_dim=3
     batch_size=1
     output_size=64
-
 
     # Setup HMC
     with tf.device("/cpu:0"):
@@ -141,9 +143,7 @@ def demo_var_mirror(
         g.z_var = tf.placeholder(tf.float32, shape=(None, z_dim), name='z_var')
 
         # Smooth update
-        # g.x_new, g.v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), x=g.pl_x, v=g.pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment, v_scale = v_scale*tf.reduce_mean(g.z_var))
         g.x_new, g.v_new = hmc_leapfrog_step(lambda z: 0.5 * tf.reduce_sum(tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), axis=0, keepdims=True), x=g.pl_x, v=g.pl_v, step_size=step_size, momentum_refreshment=momentum_refreshment, v_scale = v_scale*tf.reduce_mean(g.z_var))
-        # g.x_new, g.v_new = momentum_sgd(lambda z: 0.5 * tf.reduce_sum((z-g.z_mean)**2/g.z_var, axis=1), x=pl_x, v=pl_v, step_size=0.01, momentum=0.9)
 
         # Random update
         g.z_sample = tf.random_normal(shape=(1, z_dim), mean=g.z_mean, stddev=g.z_var**.5)
@@ -160,18 +160,12 @@ def demo_var_mirror(
 
         g.qz_mean_prod, g.qz_var_prod = multiply_gaussians(means=g.qz_mean, variances=g.qz_var, axis=0, keepdims=True)
 
-
     # Setup Session and load params
     sess = tf.InteractiveSession()
     tl.layers.initialize_global_variables(sess)
 
     gen_file_path = get_file('models/dfc-vae3/net_g.npz', url = 'https://drive.google.com/uc?export=download&id=1YHcctf9l90agJSFFSTiMwjm10WGQO6Lu')
     enc_file_path = get_file('models/dfc-vae3/net_e.npz', url = 'https://drive.google.com/uc?export=download&id=1vLJVU_BDvpDqTfNhC80C3GZI2IxscYwH')
-    # LOCAL = True
-    # if LOCAL:
-    #     netpath = get_file('models/dfc-vae3', url = )
-    # else:
-    #     netpath = '/home/petered/remote/vae-celebA/vae_celebA/checkpoint/dfc-vae3'
 
     gen_params = tl.files.load_npz(*os.path.split(gen_file_path))
     tl.files.assign_params(sess, gen_params, g.gen0)
@@ -182,43 +176,28 @@ def demo_var_mirror(
 
     # face_detector = get_face_detector_version('video')
     face_detector = FaceAligner2(
-        # desiredLeftEye = (0.38, 0.50),
-
         desiredLeftEye = [0.35954122, 0.51964207],
         desiredRightEye = [0.62294991, 0.52083333],
-        # desiredLeftEye = (0.39, 0.51),
         desiredFaceWidth=64,
         desiredFaceHeight=64,
     )
 
-    # cam = VideoCamera(size=(640, 480))
-    # cam = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb')
     prior_mean = np.zeros([1, z_dim])
     prior_var = np.ones([1, z_dim])
     x = np.random.randn(1, z_dim)
     v = np.random.randn(1, z_dim)*0
 
-    # iterator = face_aligning_iterator(
-    #     camera = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb'),
-    #     face_aligner=face_detector,
-    #     image_preprocessor=partial(preprocess_image, crop_frac=crop_frac, gamma = 3 if do_brightness_equalization else None)
-    # )
-
-    iterator = iter_latest_asynchonously(
-        gen_func = partial(
+    gen_func = partial(
             face_aligning_iterator,
             camera = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb'),
             face_aligner=face_detector,
-            image_preprocessor=partial(preprocess_image, crop_frac=crop_frac, gamma = 3 if do_brightness_equalization else None)
-            ),
-        empty_value=(None, [], []),
-        uninitialized_wait=0.1,
-        # use_forkserver = True,
-    )
+            image_preprocessor=partial(preprocess_image, crop_frac=crop_frac, gamma = gamma_correction)
+            )
 
-    # Run
-    # im = np.zeros((64, 64, 3))
-    for t, (rgb_im, landmarks, raw_faces) in enumerate(iterator):
+    iterator = iter_latest_asynchonously(gen_func = gen_func, empty_value=(None, [], []), uninitialized_wait=0.1) \
+        if async else gen_func()
+
+    for t, (rgb_im, landmarks, raw_faces) in limit_iteration_rate(enumerate(iterator), period = 1./max_fps):
 
         with profile_context('total'):
             if rgb_im is None:
@@ -228,7 +207,7 @@ def demo_var_mirror(
             else:
                 with profile_context('inference'):
                     if len(raw_faces)>0:
-                        faces = raw_faces[[int(time.time()//10)%len(raw_faces)]]  # Optional
+                        faces = raw_faces[[int(time.time()//multiface_rotation_time)%len(raw_faces)]]  # Optional
                         faces = faces/127.5-1.
                         # post_mean, post_var = sess.run([g.qz_mean_prod, g.qz_var_prod], {g.input_imgs: faces})
                         post_mean, post_var = sess.run([g.qz_mean, g.qz_var], {g.input_imgs: faces})
@@ -257,27 +236,12 @@ def demo_var_mirror(
                     dbplot(im if rgb_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
             if show_display_plot:
                 face_img = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8)
-                # face_img=add_fade_frame(face_img, p_norm=1.2)
-
-                # cv2.imshow('face_img', face_img)
-
-                # show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
-                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
+                show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
             if show_camera_window:
-                display_face_aligner(rgb_im=rgb_im, landmarks=landmarks, faces=faces)
+                display_face_aligner(rgb_im=rgb_im, landmarks=landmarks, faces=raw_faces)
 
-                # display_img = rgb_im[..., ::-1].copy()
-                #
-                # for landmark, face in zip(landmarks, raw_faces):
-                #     cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                #     cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-                #     display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
-                #
-                # cv2.imshow('camera', display_img)
-                # cv2.waitKey(1)
         if do_every('5s'):
             profile = get_profile_contexts(['total', 'generation', 'inference'], fill_empty_with_zero=True)
-            print(profile)
             print(f'Mean Times:: Total: {profile["total"][1]/profile["total"][0]:.3g}, Inference: {profile["inference"][1]/profile["inference"][0]:.3g}, Generation: {profile["generation"][1]/profile["generation"][0]:.3g}')
 
 
@@ -310,5 +274,5 @@ if __name__ == '__main__':
         crop_frac=crop_frac,
         display_number=0,
         display_sizes = display_sizes,
-        do_brightness_equalization=True
+        gamma_correction=True
         )

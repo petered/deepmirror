@@ -202,11 +202,9 @@ def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
 def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor=None):
 
     for im in camera.iterator():
-        print('Here')
         if im is None:
             yield None, None, None
         else:
-            print('Image')
             if image_preprocessor is not None:
                 im = image_preprocessor(im)
             landmarks, faces = face_aligner(im)
@@ -216,10 +214,10 @@ def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, imag
 def display_face_aligner(rgb_im, landmarks, faces, text=None):
     display_img = rgb_im[..., ::-1].copy()
 
-    for landmark, face in zip(landmarks, faces):
+    for i, (landmark, face) in enumerate(zip(landmarks, faces)):
         cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
         cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-        display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
+        display_img[-face.shape[0]:, -face.shape[1]*(i+1):display_img.shape[1]-face.shape[1]*i, ::-1] = face
     if text is not None:
         cv2.putText(display_img, text, (20, 20), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 0))
     cv2.imshow('camera', display_img)

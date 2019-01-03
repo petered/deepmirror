@@ -52,7 +52,6 @@ class VideoCamera(object):
                 print("Missed Camera Frame for the %s'th time!" % (self._missed_frame_count, ))
                 time.sleep(missed_frame_sleep_time)
             else:
-                print('Yielding Im')
                 yield im
 
 
