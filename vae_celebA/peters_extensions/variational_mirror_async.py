@@ -1,4 +1,6 @@
 import os
+
+import sys
 from argparse import Namespace
 import time
 from functools import partial
@@ -11,7 +13,7 @@ import tensorlayer as tl
 
 from artemis.fileman.file_getter import get_file
 from artemis.general.async import iter_latest_asynchonously
-from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts
+from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts, get_profile_contexts_string
 from artemis.general.checkpoint_counter import do_every
 from artemis.general.global_rates import limit_rate, limit_iteration_rate
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
@@ -241,8 +243,7 @@ def demo_var_mirror(
                 display_face_aligner(rgb_im=rgb_im, landmarks=landmarks, faces=raw_faces)
 
         if do_every('5s'):
-            profile = get_profile_contexts(['total', 'generation', 'inference'], fill_empty_with_zero=True)
-            print(f'Mean Times:: Total: {profile["total"][1]/profile["total"][0]:.3g}, Inference: {profile["inference"][1]/profile["inference"][0]:.3g}, Generation: {profile["generation"][1]/profile["generation"][0]:.3g}')
+            print(get_profile_contexts_string(['total', 'generation', 'inference'], fill_empty_with_zero=True))
 
 
 if __name__ == '__main__':
@@ -251,17 +252,26 @@ if __name__ == '__main__':
     #     set_start_method('forkserver')
     # except RuntimeError:
     #     pass
+
+    args = sys.argv[1:]
+
+    if len(args)>0:
+        mode = args[0]
+    else:
+        mode='inside'
+
     set_start_method('forkserver', force=True)
 
-    OUTSIDE = False
     display_sizes = [(1440, 900), (1920, 1080)]
 
-    if OUTSIDE:
+    if mode=='outside':
         crop_frac = [(.3, .7), (0, 1)]
         video_size = (640, 480)
-    else:
+    elif mode=='inside':
         crop_frac = None
         video_size = (320, 240)
+    else:
+        raise NotImplementedError(f'Mode "{mode}" not implemented')
 
     demo_var_mirror(
         smooth=True,

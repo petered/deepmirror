@@ -19,6 +19,8 @@ https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
 # import the necessary packages
 from collections import OrderedDict
 from artemis.fileman.file_getter import get_file
+from artemis.general.checkpoint_counter import do_every
+from artemis.general.ezprofile import profile_context, get_profile_contexts_string
 import numpy as np
 import cv2
 
@@ -206,8 +208,14 @@ def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, imag
             yield None, None, None
         else:
             if image_preprocessor is not None:
-                im = image_preprocessor(im)
-            landmarks, faces = face_aligner(im)
+                with profile_context('preprocessing'):
+                    im = image_preprocessor(im)
+            with profile_context('face_detection'):
+                landmarks, faces = face_aligner(im)
+
+            if do_every('5s'):
+                print(get_profile_contexts_string(fill_empty_with_zero=True))
+
             yield im, landmarks, faces
 
 
