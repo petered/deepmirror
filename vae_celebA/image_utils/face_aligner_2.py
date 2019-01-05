@@ -71,7 +71,8 @@ def shape_to_np(shape, dtype="int"):
 
 
 
-FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
+# FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
+FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye'])
 
 
 class FaceAligner2:
