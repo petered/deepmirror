@@ -33,7 +33,7 @@ def demo_aligned_face_detection():
     )
 
     for i in itertools.count(0):
-        sample_pic = smart_load_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'))
+        sample_pic = smart_load_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i+1)))
         with hold_dbplots():
             dbplot(sample_pic, 'sample_pic')
             bgr_im = cam.read()
@@ -54,7 +54,7 @@ def define_eye_positions(n_pics=10):
     left = []
     right = []
     for i in range(n_pics):
-        sample_pic = smart_load_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'))
+        sample_pic = smart_load_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i+1)))
 
         im = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
 
@@ -182,7 +182,7 @@ def demo_face_aligner_iterator(async=False):
             time.sleep(0.1)
             continue
 
-        display_face_aligner(img, landmarks, faces, text = f't={t}: {len(landmarks)} Faces')
+        display_face_aligner(img, landmarks, faces, text = 't={}: {} Faces'.format(t, len(landmarks)))
 
         # dbplot(img, 'You', cornertext=f't={t}')
         # dbplot(faces if len(faces)>0 else np.zeros((1, )+faces.shape[1:], dtype=np.uint8), 'Detected Faces')
