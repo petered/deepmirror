@@ -153,7 +153,7 @@ def demo_aligned_face_detection_simple(camera_device_no = 0, camera_size=(320, 2
 
 
 
-def demo_face_aligner_iterator(async=False):
+def demo_face_aligner_iterator(async=False, size=(320, 240)):
 
     face_aligner=FaceAligner2(
         desiredLeftEye = [0.35954122, 0.51964207],
@@ -162,16 +162,18 @@ def demo_face_aligner_iterator(async=False):
         desiredFaceHeight=64,
         model = 'large',
         )
-    camera = VideoCamera(size=(640, 480), mode='rgb')
+    camera = VideoCamera(size=size, mode='rgb')
+
+    gen_func = partial(face_aligning_iterator, face_aligner=face_aligner, camera=camera)
 
     if async:
         iterator = iter_latest_asynchonously(
-            gen_func = partial(face_aligning_iterator, face_aligner=face_aligner, camera=camera), empty_value=(None, None, None),
+            gen_func = gen_func, empty_value=(None, None, None),
             use_forkserver=True,
             uninitialized_wait=0.1
         )
     else:
-        iterator = face_aligning_iterator(face_aligner=face_aligner, camera=camera)
+        iterator = gen_func()
 
     for t, (img, landmarks, faces) in enumerate(iterator):
         if img is None:

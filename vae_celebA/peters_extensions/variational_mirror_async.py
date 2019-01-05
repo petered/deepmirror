@@ -271,7 +271,7 @@ if __name__ == '__main__':
         crop_frac = None
         video_size = (320, 240)
     else:
-        raise NotImplementedError(f'Mode "{mode}" not implemented')
+        raise NotImplementedError('Mode "{}" not implemented'.format(mode))
 
     demo_var_mirror(
         smooth=True,
