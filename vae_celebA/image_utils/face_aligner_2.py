@@ -1,28 +1,21 @@
 
 
-# import the necessary packages
-from time import time
-from typing import NamedTuple, Tuple, Sequence
+from collections import OrderedDict
+from collections import namedtuple
 
+import cv2
 import face_recognition
 import numpy as np
-import cv2
-import dlib
+from typing import Tuple, Sequence
 
+from artemis.general.checkpoint_counter import do_every
+from artemis.general.ezprofile import profile_context, get_profile_contexts_string
 from vae_celebA.image_utils.video_camera import VideoCamera
 
 """
-Taken from the website of Adrian Rosebrock
+Extended from stuff on the website of Adrian Rosebrock
 https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
 """
-
-# import the necessary packages
-from collections import OrderedDict
-from artemis.fileman.file_getter import get_file
-from artemis.general.checkpoint_counter import do_every
-from artemis.general.ezprofile import profile_context, get_profile_contexts_string
-import numpy as np
-import cv2
 
 
 # define a dictionary that maps the indexes of the facial
@@ -62,19 +55,23 @@ def shape_to_np(shape, dtype="int"):
 	return coords
 
 
-class FaceLandmarks(NamedTuple):
-    """
-    Each is an (n_points, 2) array of (x, y) locations.
-    """
-    nose_tip: np.ndarray
-    left_eye: np.ndarray
-    right_eye: np.ndarray
-    chin: np.ndarray = None
-    left_eyebrow: np.ndarray = None
-    right_eyebrow: np.ndarray = None
-    nose_bridge: np.ndarray = None
-    top_lip: np.ndarray = None
-    bottom_lip: np.ndarray = None
+# class FaceLandmarks(NamedTuple):
+#     """
+#     Each is an (n_points, 2) array of (x, y) locations.
+#     """
+#     nose_tip: np.ndarray
+#     left_eye: np.ndarray
+#     right_eye: np.ndarray
+#     chin: np.ndarray = None
+#     left_eyebrow: np.ndarray = None
+#     right_eyebrow: np.ndarray = None
+#     nose_bridge: np.ndarray = None
+#     top_lip: np.ndarray = None
+#     bottom_lip: np.ndarray = None
+
+
+
+FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
 
 
 class FaceAligner2:
