@@ -152,7 +152,6 @@ def demo_aligned_face_detection_simple(camera_device_no = 0, camera_size=(320, 2
                 time.sleep(0.1)
 
 
-
 def demo_face_aligner_iterator(async=False, size=(320, 240)):
 
     face_aligner=FaceAligner2(
