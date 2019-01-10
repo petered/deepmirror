@@ -1,26 +1,21 @@
 
 
-# import the necessary packages
-from time import time
-from typing import NamedTuple, Tuple, Sequence
+from collections import OrderedDict
+from collections import namedtuple
 
+import cv2
 import face_recognition
 import numpy as np
-import cv2
-import dlib
+from typing import Tuple, Sequence
 
+from artemis.general.checkpoint_counter import do_every
+from artemis.general.ezprofile import profile_context, get_profile_contexts_string
 from vae_celebA.image_utils.video_camera import VideoCamera
 
 """
-Taken from the website of Adrian Rosebrock
+Extended from stuff on the website of Adrian Rosebrock
 https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
 """
-
-# import the necessary packages
-from collections import OrderedDict
-from artemis.fileman.file_getter import get_file
-import numpy as np
-import cv2
 
 
 # define a dictionary that maps the indexes of the facial
@@ -60,19 +55,24 @@ def shape_to_np(shape, dtype="int"):
 	return coords
 
 
-class FaceLandmarks(NamedTuple):
-    """
-    Each is an (n_points, 2) array of (x, y) locations.
-    """
-    nose_tip: np.ndarray
-    left_eye: np.ndarray
-    right_eye: np.ndarray
-    chin: np.ndarray = None
-    left_eyebrow: np.ndarray = None
-    right_eyebrow: np.ndarray = None
-    nose_bridge: np.ndarray = None
-    top_lip: np.ndarray = None
-    bottom_lip: np.ndarray = None
+# class FaceLandmarks(NamedTuple):
+#     """
+#     Each is an (n_points, 2) array of (x, y) locations.
+#     """
+#     nose_tip: np.ndarray
+#     left_eye: np.ndarray
+#     right_eye: np.ndarray
+#     chin: np.ndarray = None
+#     left_eyebrow: np.ndarray = None
+#     right_eyebrow: np.ndarray = None
+#     nose_bridge: np.ndarray = None
+#     top_lip: np.ndarray = None
+#     bottom_lip: np.ndarray = None
+
+
+
+# FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
+FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye'])
 
 
 class FaceAligner2:
@@ -202,24 +202,28 @@ def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
 def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor=None):
 
     for im in camera.iterator():
-        print('Here')
         if im is None:
             yield None, None, None
         else:
-            print('Image')
             if image_preprocessor is not None:
-                im = image_preprocessor(im)
-            landmarks, faces = face_aligner(im)
+                with profile_context('preprocessing'):
+                    im = image_preprocessor(im)
+            with profile_context('face_detection'):
+                landmarks, faces = face_aligner(im)
+
+            if do_every('5s'):
+                print(get_profile_contexts_string(fill_empty_with_zero=True))
+
             yield im, landmarks, faces
 
 
 def display_face_aligner(rgb_im, landmarks, faces, text=None):
     display_img = rgb_im[..., ::-1].copy()
 
-    for landmark, face in zip(landmarks, faces):
+    for i, (landmark, face) in enumerate(zip(landmarks, faces)):
         cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
         cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-        display_img[-face.shape[0]:, -face.shape[1]:, ::-1] = face
+        display_img[-face.shape[0]:, -face.shape[1]*(i+1):display_img.shape[1]-face.shape[1]*i, ::-1] = face
     if text is not None:
         cv2.putText(display_img, text, (20, 20), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 0))
     cv2.imshow('camera', display_img)

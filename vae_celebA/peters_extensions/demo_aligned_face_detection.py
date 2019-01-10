@@ -1,10 +1,7 @@
+import face_recognition
 from functools import partial
 
-import face_recognition
-import itertools
-
 from artemis.general.async import iter_latest_asynchonously
-from artemis.general.global_rates import measure_global_rate
 from vae_celebA.image_utils.face_aligner import FaceAligner
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2, face_aligning_iterator, display_face_aligner
 from vae_celebA.utils import get_image
@@ -33,7 +30,7 @@ def demo_aligned_face_detection():
     )
 
     for i in itertools.count(0):
-        sample_pic = smart_load_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'))
+        sample_pic = smart_load_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i+1)))
         with hold_dbplots():
             dbplot(sample_pic, 'sample_pic')
             bgr_im = cam.read()
@@ -54,24 +51,24 @@ def define_eye_positions(n_pics=10):
     left = []
     right = []
     for i in range(n_pics):
-        sample_pic = smart_load_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'))
+        sample_pic = smart_load_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i+1)))
 
-        im = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
+        im = get_image(get_artemis_data_path('data/celeba/img_align_celeba/{i+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
 
         landmarks = face_recognition.face_landmarks(((im+1)*127.5).astype(np.uint8), model='large')
         dbplot(im, 'im')
         if len(landmarks)==0:
-            print(f'No face found in image {i}')
+            print('No face found in image {}'.format(i))
         else:
             lmark = landmarks[0]
             left_eye_position = np.mean(lmark['left_eye'], axis=0)/(im.shape[1], im.shape[0])
             right_eye_position = np.mean(lmark['right_eye'], axis=0)/(im.shape[1], im.shape[0])
-            print(f'Left-Eye_position: {left_eye_position}')
-            print(f'Right-Eye_position: {right_eye_position}')
+            print('Left-Eye_position: {}'.format(left_eye_position))
+            print('Right-Eye_position: {}'.format(right_eye_position))
             left.append(left_eye_position)
             right.append(right_eye_position)
 
-    print(f'Mean Position: Left: {np.mean(left, axis=0)}±{np.std(left, axis=0)}, Right: {np.mean(right, axis=0)}+{np.std(left, axis=0)}')
+    print('Mean Position: Left: {}±{}, Right: {}+{}'.format(np.mean(left, axis=0), np.std(left, axis=0), np.mean(right, axis=0), np.std(left, axis=0)))
 
 
 def demo_aligned_face_detection_2(camera_device_no = 0, camera_size=(320, 240), model='large'):
@@ -79,7 +76,7 @@ def demo_aligned_face_detection_2(camera_device_no = 0, camera_size=(320, 240), 
     cam = VideoCamera(size=camera_size, device=camera_device_no)
     # cam = VideoCamera(size=(640, 480))
     i=0
-    sample_pic = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i//10+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
+    sample_pic = get_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i//10+1)), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
 
     face_detector = FaceAligner2(
         # desiredLeftEye = (0.39, 0.51),
@@ -91,7 +88,7 @@ def demo_aligned_face_detection_2(camera_device_no = 0, camera_size=(320, 240), 
     )
 
     for i in itertools.count(0):
-        sample_pic = get_image(get_artemis_data_path(f'data/celeba/img_align_celeba/{i//10+1:06d}.jpg'), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
+        sample_pic = get_image(get_artemis_data_path('data/celeba/img_align_celeba/{:06d}.jpg'.format(i//10+1)), image_size=148, is_crop=True, resize_w=64, is_grayscale = 0)
 
         with hold_dbplots():
             dbplot(sample_pic, 'sample_pic')
@@ -155,8 +152,7 @@ def demo_aligned_face_detection_simple(camera_device_no = 0, camera_size=(320, 2
                 time.sleep(0.1)
 
 
-
-def demo_face_aligner_iterator(async=False):
+def demo_face_aligner_iterator(async=False, size=(320, 240)):
 
     face_aligner=FaceAligner2(
         desiredLeftEye = [0.35954122, 0.51964207],
@@ -165,16 +161,18 @@ def demo_face_aligner_iterator(async=False):
         desiredFaceHeight=64,
         model = 'large',
         )
-    camera = VideoCamera(size=(640, 480), mode='rgb')
+    camera = VideoCamera(size=size, mode='rgb')
+
+    gen_func = partial(face_aligning_iterator, face_aligner=face_aligner, camera=camera)
 
     if async:
         iterator = iter_latest_asynchonously(
-            gen_func = partial(face_aligning_iterator, face_aligner=face_aligner, camera=camera), empty_value=(None, None, None),
+            gen_func = gen_func, empty_value=(None, None, None),
             use_forkserver=True,
             uninitialized_wait=0.1
         )
     else:
-        iterator = face_aligning_iterator(face_aligner=face_aligner, camera=camera)
+        iterator = gen_func()
 
     for t, (img, landmarks, faces) in enumerate(iterator):
         if img is None:
@@ -182,7 +180,7 @@ def demo_face_aligner_iterator(async=False):
             time.sleep(0.1)
             continue
 
-        display_face_aligner(img, landmarks, faces, text = f't={t}: {len(landmarks)} Faces')
+        display_face_aligner(img, landmarks, faces, text = 't={}: {} Faces'.format(t, len(landmarks)))
 
         # dbplot(img, 'You', cornertext=f't={t}')
         # dbplot(faces if len(faces)>0 else np.zeros((1, )+faces.shape[1:], dtype=np.uint8), 'Detected Faces')
