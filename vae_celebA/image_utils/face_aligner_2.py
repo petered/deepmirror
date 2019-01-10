@@ -71,7 +71,7 @@ def shape_to_np(shape, dtype="int"):
 
 
 
-# FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
+FaceLandmarksLarge = namedtuple('FaceLandmarksLarge', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
 FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye'])
 
 
@@ -87,7 +87,7 @@ class FaceAligner2:
         self.desiredFaceHeight = desiredFaceHeight
         self.desiredRightEye = desiredRightEye
         self.border_mode = border_mode
-        self.model='small'
+        self.model=model
 
         # if the desired face height is None, set it to be the
         # desired face width (normal behavior)
@@ -97,7 +97,9 @@ class FaceAligner2:
     def __call__(self, im: np.ndarray) -> Tuple[Sequence[FaceLandmarks], np.ndarray]:
 
         landmark_dicts = face_recognition.face_landmarks(im, model=self.model)
-        landmarks_per_face = [FaceLandmarks(**{k: np.array(v) for k, v in d.items()}) for d in landmark_dicts]
+
+        klass = FaceLandmarks if self.model=='small' else FaceLandmarksLarge
+        landmarks_per_face = [klass(**{k: np.array(v) for k, v in d.items()}) for d in landmark_dicts]
 
         landmarks_per_face = sorted(landmarks_per_face, key = lambda x: x.left_eye[0][0])
         ims = []
