@@ -129,7 +129,6 @@ def demo_var_mirror(
     batch_size=1
     output_size=64
 
-
     # Setup HMC
     with tf.device("/cpu:0"):
         g = Namespace()
