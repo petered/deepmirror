@@ -5,6 +5,8 @@ from vae_celebA.image_utils.video_camera import VideoCamera
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 import cv2
 
+from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen
+
 intify = lambda x: tuple(x.astype(int))
 
 
@@ -35,6 +37,7 @@ def add_lipstick_(img, landmark, color=(0, 0, 128)):
     cv2.fillPoly(img, pts=[landmark.top_lip.astype(int)], color=color, )
     cv2.fillPoly(img, pts=[landmark.bottom_lip.astype(int)], color=color, )
 
+
 def enhance_eyebrows_(img, landmark, color=(0, 20, 20)):
 
 
@@ -57,8 +60,9 @@ def demo_give_glasses():
             add_glasses_(im, landmark)
             add_lipstick_(im, landmark)
 
-        cv2.imshow('image', im)
-        cv2.waitKey(1)
+        show_fullscreen(im, display_sizes=[(1440, 900), (1920, 1080)])
+        # cv2.imshow('image', im)
+        # cv2.waitKey(1)
 
 
 if __name__ == '__main__':
