@@ -266,7 +266,8 @@ if __name__ == '__main__':
 
     if mode=='outside':
         crop_frac = [(.3, .7), (0, 1)]
-        video_size = (640, 480)
+        video_size = (640,
+                      480)
     elif mode=='inside':
         crop_frac = None
         video_size = (320, 240)

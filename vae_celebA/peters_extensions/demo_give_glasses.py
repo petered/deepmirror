@@ -47,7 +47,8 @@ def enhance_eyebrows_(img, landmark, color=(0, 20, 20)):
 
 def demo_give_glasses():
 
-    cam = VideoCamera(size=(640, 480), device=0, mode='bgr', hflip=True)
+    # cam = VideoCamera(size=(640, 480), device=0, mode='bgr', hflip=True)
+    cam = VideoCamera(size=(480, 360), device=0, mode='bgr', hflip=True)
     face_det = FaceAligner2(model='large')
 
     for im in cam.iterator():
@@ -60,7 +61,7 @@ def demo_give_glasses():
             add_glasses_(im, landmark)
             add_lipstick_(im, landmark)
 
-        show_fullscreen(im, display_sizes=[(1440, 900), (1920, 1080)])
+        show_fullscreen(im, display_sizes=[(1440, 900), (1920, 1080)], )
         # cv2.imshow('image', im)
         # cv2.waitKey(1)
 
