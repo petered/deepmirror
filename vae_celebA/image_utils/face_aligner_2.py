@@ -6,11 +6,12 @@ from collections import namedtuple
 import cv2
 import face_recognition
 import numpy as np
-from typing import Tuple, Sequence
+from typing import Tuple, Sequence, Optional
 
 from artemis.general.checkpoint_counter import do_every
 from artemis.general.ezprofile import profile_context, get_profile_contexts_string
 from vae_celebA.image_utils.video_camera import VideoCamera
+from vae_celebA.peters_extensions.attention_window import AttentionWindow
 
 """
 Extended from stuff on the website of Adrian Rosebrock
@@ -203,13 +204,18 @@ def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
 
 def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor=None):
 
+    if image_preprocessor is not None and not isinstance(image_preprocessor, (list, tuple)):
+        image_preprocessor = [image_preprocessor]
+
     for im in camera.iterator():
         if im is None:
             yield None, None, None
         else:
             if image_preprocessor is not None:
                 with profile_context('preprocessing'):
-                    im = image_preprocessor(im)
+                    for p in image_preprocessor:
+                        im = p(im)
+
             with profile_context('face_detection'):
                 landmarks, faces = face_aligner(im)
 
