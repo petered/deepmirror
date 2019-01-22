@@ -191,4 +191,5 @@ if __name__ == '__main__':
     # define_eye_positions(n_pics=100)
     # demo_aligned_face_detection_2(camera_device_no=0, camera_size = (640, 480), model='large')
     # demo_aligned_face_detection_simple(camera_device_no=0, camera_size = (640, 480), model='large')
-    demo_face_aligner_iterator()
+    # demo_face_aligner_iterator(size=(800, 600))
+    demo_face_aligner_iterator(size=(1024, 768))
