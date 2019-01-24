@@ -5,7 +5,7 @@ from vae_celebA.image_utils.video_camera import VideoCamera
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 import cv2
 
-from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen
+from vae_celebA.peters_extensions.fullscreen_display import show_fullscreen, show_fullscreen_v1
 
 intify = lambda x: tuple(x.astype(int))
 
@@ -18,7 +18,7 @@ def add_glasses_(img, landmark, color=(0, 0, 0)):
 
 
     rad = int(((right_ctr-left_ctr)**2).sum()**.5 / 3.)
-    thickness = int(rad/4)
+    thickness = max(1, int(rad/4))
 
     cv2.circle(img, intify(left_ctr), radius=rad, thickness=thickness, color=color)
     cv2.circle(img, intify(right_ctr), radius=rad, thickness=thickness, color=color)
@@ -61,7 +61,7 @@ def demo_give_glasses():
             add_glasses_(im, landmark)
             add_lipstick_(im, landmark)
 
-        show_fullscreen(im, display_sizes=[(1440, 900), (1920, 1080)], )
+        show_fullscreen_v1(im, display_sizes=[(1440, 900), (1920, 1080)], )
         # cv2.imshow('image', im)
         # cv2.waitKey(1)
 

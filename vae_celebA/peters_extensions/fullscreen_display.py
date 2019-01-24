@@ -60,6 +60,7 @@ def show_fullscreen_v1(image, background_colour = None, window_name='window', di
     cv2.imshow(window_name, display_img)
     cv2.waitKey(1)
 
+
 def show_fullscreen(image, background_colour = None, window_name='window', display_number = 0, display_sizes=None):
     """
     Draw a fullscreen image.
@@ -81,14 +82,14 @@ def show_fullscreen(image, background_colour = None, window_name='window', displ
 
     assert display_number in (0, 1), 'Only 2 displays supported for now.'
     if window_name not in _FULL_FRAMES:
-        # cv2.namedWindow(window_name, cv2.WND_PROP_FULLSCREEN)
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(window_name, cv2.WND_PROP_FULLSCREEN)
+        # cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         if display_number == 1:
             assert display_sizes is not None
             first_display_size = display_sizes[0]
             cv2.moveWindow(window_name, *first_display_size)
-        # cv2.setWindowProperty(window_name,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
-        cv2.setWindowProperty(window_name,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty(window_name,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+        # cv2.setWindowProperty(window_name,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_NORMAL)
         if background_colour is not None:
             background_colour = np.array(background_colour)
             if background_colour.dtype=='int':

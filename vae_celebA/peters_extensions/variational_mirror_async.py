@@ -13,9 +13,11 @@ import tensorlayer as tl
 
 from artemis.fileman.file_getter import get_file
 from artemis.general.async import iter_latest_asynchonously
+from artemis.general.dead_easy_ui import parse_user_function_call
 from artemis.general.ezprofile import EZProfiler, profile_context, get_profile_contexts, get_profile_contexts_string
 from artemis.general.checkpoint_counter import do_every
 from artemis.general.global_rates import limit_rate, limit_iteration_rate
+from artemis.general.should_be_builtins import bad_value
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from vae_celebA.dfc_vae import encoder, generator
 from vae_celebA.image_utils.face_aligner_2 import FaceAligner2, face_aligning_iterator, display_face_aligner
@@ -117,8 +119,8 @@ def demo_var_mirror(
         smooth=True,
         display_size=(224, 224),
         show_debug_plots=False,
-        show_display_plot=False,
-        show_camera_window=False,
+        show_display_plot=True,
+        show_camera_window=True,
         opposite=False,
         v_scale=4.,
         camera_device_no=0,
@@ -126,10 +128,11 @@ def demo_var_mirror(
         crop_frac=None,
         multiface_rotation_time = 7,
         display_sizes=[(1440, 900), (1920, 1080)],
-        attention_mode = 'lab',
+        attention_mode = None,
         gamma_correction = 2,
         max_fps = 24,
-        async = True
+        async = True,
+        fullscreen_version = 0,
         ):
 
     z_dim = 100
@@ -196,7 +199,8 @@ def demo_var_mirror(
             face_aligning_iterator,
             camera = VideoCamera(size=video_size, device=camera_device_no, hflip=True, mode='rgb'),
             face_aligner=face_detector,
-            image_preprocessor=[partial(crop_by_fraction, vcrop=crop_frac[0], hcrop=crop_frac[1])] +
+            image_preprocessor=
+                ([partial(crop_by_fraction, vcrop=crop_frac[0], hcrop=crop_frac[1])] if crop_frac is not None else []) +
                 ([AttentionWindow.from_default_settings(attention_mode)] if attention_mode is not None else []) +
                 [partial(correct_gamma, gamma=gamma_correction)]
             )
@@ -242,8 +246,12 @@ def demo_var_mirror(
                     dbplot(im if rgb_im is None or len(faces)==0 or t%2==0 else faces[0], 'flicker')
             if show_display_plot:
                 face_img = ((im[0, :, :, ::-1]+1.)*127.5).astype(np.uint8)
-                show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
-                # show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
+
+                if fullscreen_version == 0:
+                    show_fullscreen(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
+                else:
+                    assert fullscreen_version == 1
+                    show_fullscreen_v1(image = face_img, background_colour=(0, 0, 0), display_sizes=display_sizes, display_number=display_number)
             if show_camera_window:
                 # print(rgb_im.shape)
                 display_face_aligner(rgb_im=rgb_im, landmarks=landmarks, faces=raw_faces)
@@ -254,42 +262,21 @@ def demo_var_mirror(
 
 if __name__ == '__main__':
 
-    # try:
-    #     set_start_method('forkserver')
-    # except RuntimeError:
-    #     pass
+    _, args, kwargs = parse_user_function_call(' '.join(sys.argv))
 
     args = sys.argv[1:]
 
-    if len(args)>0:
-        mode = args[0]
-    else:
-        mode='outside'
+    mode = 'outside' if len(args)==0 else args[0] if len(args)==1 else bad_value(f'Can only provided 1 unnamed arg, for mode.  You provided: {args}')
 
     set_start_method('forkserver', force=True)
 
-    display_sizes = [(1440, 900), (1920, 1080)]
-
-    if mode=='outside':
-        crop_frac = [(.3, .7), (0, 1)]
-        video_size = (640, 480)
-    elif mode=='inside':
-        crop_frac = None
-        video_size = (320, 240)
+    if mode == 'laptop':
+        keyword_args = dict(video_size = (320, 240), display_sizes=[(1440, 900), (1920, 1080)], fullscreen_version = 0)
+    elif mode == 'outside':
+        keyword_args = dict(video_size = (640, 480), attention_mode = 'faces', display_sizes=[(1440, 900), (1920, 1080)])
     else:
-        raise NotImplementedError('Mode "{}" not implemented'.format(mode))
+        raise NotImplementedError(mode)
 
-    demo_var_mirror(
-        smooth=True,
-        opposite = False,
-        show_debug_plots=False,
-        show_display_plot=True,
-        show_camera_window=True,
-        camera_device_no=0,
-        video_size = video_size,
-        crop_frac=crop_frac,
-        display_number=0,
-        display_sizes = display_sizes,
-        gamma_correction=True,
-        attention_mode='lab'
-        )
+    keyword_args.update(kwargs)
+
+    demo_var_mirror(**keyword_args)
