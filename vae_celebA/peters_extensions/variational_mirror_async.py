@@ -274,6 +274,8 @@ if __name__ == '__main__':
         keyword_args = dict(video_size = (320, 240), display_sizes=[(1440, 900), (1920, 1080)], fullscreen_version = 0)
     elif mode == 'outside':
         keyword_args = dict(video_size = (640, 480), attention_mode = 'faces', display_sizes=[(1440, 900), (1920, 1080)])
+    elif mode == 'box-outside':
+        keyword_args = dict(video_size = (640, 480), attention_mode = 'faces', display_sizes=[(1920, 1080)], fullscreen_version=1)
     else:
         raise NotImplementedError(mode)
 
