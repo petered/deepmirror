@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
     args = sys.argv[1:]
 
-    mode = 'outside' if len(args)==0 else args[0] if len(args)==1 else bad_value(f'Can only provided 1 unnamed arg, for mode.  You provided: {args}')
+    mode = 'laptop' if len(args)==0 else args[0] if len(args)==1 else bad_value(f'Can only provided 1 unnamed arg, for mode.  You provided: {args}')
 
     set_start_method('forkserver', force=True)
 
