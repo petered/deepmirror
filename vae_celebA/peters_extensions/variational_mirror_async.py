@@ -169,7 +169,7 @@ def demo_var_mirror(
         g.qz_mean_prod, g.qz_var_prod = multiply_gaussians(means=g.qz_mean, variances=g.qz_var, axis=0, keepdims=True)
 
     # Setup Session and load params
-    sess = tf.InteractiveSession()
+    sess = tf.InteractiveSession(config=tf.ConfigProto(device_count=dict(GPU=0)))
     tl.layers.initialize_global_variables(sess)
 
     gen_file_path = get_file('models/dfc-vae3/net_g.npz', url = 'https://drive.google.com/uc?export=download&id=1YHcctf9l90agJSFFSTiMwjm10WGQO6Lu')
@@ -208,7 +208,6 @@ def demo_var_mirror(
     iterator = iter_latest_asynchonously(gen_func = gen_func, empty_value=(None, [], []), uninitialized_wait=0.1) if async else gen_func()
 
     for t, (rgb_im, landmarks, raw_faces) in limit_iteration_rate(enumerate(iterator), period = 1./max_fps):
-
         with profile_context('total'):
             if rgb_im is None:
                 print('No Camera Imageasss')
@@ -266,12 +265,15 @@ if __name__ == '__main__':
 
     args = sys.argv[1:]
 
-    mode = 'laptop' if len(args)==0 else args[0] if len(args)==1 else bad_value(f'Can only provided 1 unnamed arg, for mode.  You provided: {args}')
+    mode = 'lab' if len(args)==0 else args[0] if len(args)==1 else bad_value(f'Can only provided 1 unnamed arg, for mode.  You provided: {args}')
 
     set_start_method('forkserver', force=True)
 
+    print(f'Running Mode: {mode}')
     if mode == 'laptop':
         keyword_args = dict(video_size = (320, 240), display_sizes=[(1440, 900), (1920, 1080)], fullscreen_version = 0)
+    elif mode == 'lab':
+        keyword_args = dict(video_size = (320, 240), display_sizes=[(1600, 1200)], fullscreen_version = 0)
     elif mode == 'outside':
         keyword_args = dict(video_size = (640, 480), attention_mode = 'faces', display_sizes=[(1440, 900), (1920, 1080)])
     elif mode == 'box-outside':

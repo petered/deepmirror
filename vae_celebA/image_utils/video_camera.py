@@ -40,6 +40,10 @@ class VideoCamera(object):
             self._initialize()
 
         retval, im = self.camera.read()
+
+        if im.shape[:2] != (self.size[1], self.size[0]):
+            im = cv2.resize(im, self.size)
+
         if im is not None:
             im = im[:, slice(None, None, -1) if self.hflip else slice(None), slice(None, None, -1) if self.mode == 'rgb' else slice(None)]
         return im
@@ -53,7 +57,6 @@ class VideoCamera(object):
                 time.sleep(missed_frame_sleep_time)
             else:
                 yield im
-
 
 
 # class VideoCamera(object):
