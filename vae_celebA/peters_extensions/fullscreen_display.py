@@ -105,7 +105,7 @@ def show_fullscreen(image, background_colour = None, window_name='window', displ
         else:
             _FULL_FRAMES[window_name] = None
 
-    if _FULL_FRAMES[window_name] is not None:
+    if _FULL_FRAMES[window_name] is not None and _FULL_FRAMES[window_name].shape[0] >= image.shape[0] and _FULL_FRAMES[window_name].shape[1] >= image.shape[1]:
         frame = _FULL_FRAMES[window_name]
         start_y, start_x = (frame.shape[0] - image.shape[0])//2, (frame.shape[1] - image.shape[1])//2
         frame[start_y: start_y+image.shape[0], start_x:start_x+image.shape[1]] = image
@@ -116,7 +116,7 @@ def show_fullscreen(image, background_colour = None, window_name='window', displ
     display_img = cv2.resize(display_img, display_sizes[display_number])
 
     cv2.imshow(window_name, display_img)
-    cv2.waitKey(1)
+    return cv2.waitKey(1)
 
 
 if __name__ == '__main__':

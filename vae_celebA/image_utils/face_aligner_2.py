@@ -1,5 +1,3 @@
-
-
 from collections import OrderedDict
 from collections import namedtuple
 
@@ -12,48 +10,50 @@ from artemis.general.checkpoint_counter import do_every
 from artemis.general.ezprofile import profile_context, get_profile_contexts_string
 from vae_celebA.image_utils.video_camera import VideoCamera
 from vae_celebA.peters_extensions.attention_window import AttentionWindow
+from vae_celebA.peters_extensions.cv_image_panels import BGRImageArray
 
 """
 Extended from stuff on the website of Adrian Rosebrock
 https://www.pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
 """
 
-
 # define a dictionary that maps the indexes of the facial
 # landmarks to specific face regions
 FACIAL_LANDMARKS_IDXS = OrderedDict([
-	("mouth", (48, 68)),
-	("right_eyebrow", (17, 22)),
-	("left_eyebrow", (22, 27)),
-	("right_eye", (36, 42)),
-	("left_eye", (42, 48)),
-	("nose", (27, 36)),
-	("jaw", (0, 17))
+    ("mouth", (48, 68)),
+    ("right_eyebrow", (17, 22)),
+    ("left_eyebrow", (22, 27)),
+    ("right_eye", (36, 42)),
+    ("left_eye", (42, 48)),
+    ("nose", (27, 36)),
+    ("jaw", (0, 17))
 ])
 
-def rect_to_bb(rect):
-	# take a bounding predicted by dlib and convert it
-	# to the format (x, y, w, h) as we would normally do
-	# with OpenCV
-	x = rect.left()
-	y = rect.top()
-	w = rect.right() - x
-	h = rect.bottom() - y
 
-	# return a tuple of (x, y, w, h)
-	return (x, y, w, h)
+def rect_to_bb(rect):
+    # take a bounding predicted by dlib and convert it
+    # to the format (x, y, w, h) as we would normally do
+    # with OpenCV
+    x = rect.left()
+    y = rect.top()
+    w = rect.right() - x
+    h = rect.bottom() - y
+
+    # return a tuple of (x, y, w, h)
+    return (x, y, w, h)
+
 
 def shape_to_np(shape, dtype="int"):
-	# initialize the list of (x, y)-coordinates
-	coords = np.zeros((68, 2), dtype=dtype)
+    # initialize the list of (x, y)-coordinates
+    coords = np.zeros((68, 2), dtype=dtype)
 
-	# loop over the 68 facial landmarks and convert them
-	# to a 2-tuple of (x, y)-coordinates
-	for i in range(0, 68):
-		coords[i] = (shape.part(i).x, shape.part(i).y)
+    # loop over the 68 facial landmarks and convert them
+    # to a 2-tuple of (x, y)-coordinates
+    for i in range(0, 68):
+        coords[i] = (shape.part(i).x, shape.part(i).y)
 
-	# return the list of (x, y)-coordinates
-	return coords
+    # return the list of (x, y)-coordinates
+    return coords
 
 
 # class FaceLandmarks(NamedTuple):
@@ -71,14 +71,65 @@ def shape_to_np(shape, dtype="int"):
 #     bottom_lip: np.ndarray = None
 
 
-
 FaceLandmarksLarge = namedtuple('FaceLandmarksLarge', ['nose_tip', 'left_eye', 'right_eye', 'chin', 'left_eyebrow', 'right_eyebrow', 'nose_bridge', 'top_lip', 'bottom_lip'])
 FaceLandmarks = namedtuple('FaceLandmarks', ['nose_tip', 'left_eye', 'right_eye'])
 
 
+def compute_rotation_translation_affine_matrix(
+        src_point_a: Tuple[float, float],
+        src_point_b: Tuple[float, float],
+        dest_point_a: Tuple[float, float],
+        dest_point_b: Tuple[float, float],
+) -> 'Array[2,3:float]':
+    src_point_a, src_point_b, dest_point_a, dest_point_b = (np.asarray(p) for p in [src_point_a, src_point_b, dest_point_a, dest_point_b])
+
+    d_src_x, d_src_y = src_point_b - src_point_a
+    d_dest_x, d_dest_y = dest_point_b - dest_point_a
+    rotation_angle = np.arctan2(d_dest_y, d_dest_x) - np.arctan2(d_src_y, d_src_x)
+
+    tmat1 = np.identity(3)
+    tmat1[[0, 1], 2] = - src_point_a
+
+    rmat = np.identity(3)
+    rmat[:2, :2] = [[np.cos(rotation_angle), -np.sin(rotation_angle)], [np.sin(rotation_angle), np.cos(rotation_angle)]]
+
+    scale = np.linalg.norm(dest_point_b - dest_point_a)/np.linalg.norm(src_point_b - src_point_a)
+    smat = np.identity(3)
+    smat[[0, 1], [0, 1]] = scale
+
+    tmat2 = np.identity(3)
+    tmat2[[0, 1], 2] = dest_point_a
+
+    # (Reversed) tra
+    hmat = tmat2 @ smat @ rmat @ tmat1
+
+    # hmat = tmat @ rmat @ smat
+
+    return hmat[:2, :]
+
+
+def cut_image_from_point_correspondances(
+        src_image: BGRImageArray,
+        dest_img_size_xy: Tuple[int, int],
+        src_point_a: Tuple[float, float],
+        src_point_b: Tuple[float, float],
+        dest_point_a: Tuple[float, float],
+        dest_point_b: Tuple[float, float],
+        border_mode=cv2.BORDER_REPLICATE
+) -> BGRImageArray:
+    mat = compute_rotation_translation_affine_matrix(
+        src_point_a=src_point_a,
+        src_point_b=src_point_b,
+        dest_point_a=dest_point_a,
+        dest_point_b=dest_point_b,
+    )
+    output = cv2.warpAffine(src_image, mat, dest_img_size_xy, flags=cv2.INTER_CUBIC, borderMode=border_mode)
+    return output
+
+
 class FaceAligner2:
 
-    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode = cv2.BORDER_REPLICATE, model='small'):
+    def __init__(self, desiredLeftEye=(0.35, 0.35), desiredRightEye=None, desiredFaceWidth=256, desiredFaceHeight=None, border_mode=cv2.BORDER_REPLICATE, model='small'):
         # store the facial landmark predictor, desired output left
         # eye position, and desired output face width + height
         # self.predictor = predictor
@@ -88,7 +139,7 @@ class FaceAligner2:
         self.desiredFaceHeight = desiredFaceHeight
         self.desiredRightEye = desiredRightEye
         self.border_mode = border_mode
-        self.model=model
+        self.model = model
 
         # if the desired face height is None, set it to be the
         # desired face width (normal behavior)
@@ -99,14 +150,14 @@ class FaceAligner2:
 
         landmark_dicts = face_recognition.face_landmarks(im, model=self.model)
 
-        klass = FaceLandmarks if self.model=='small' else FaceLandmarksLarge
+        klass = FaceLandmarks if self.model == 'small' else FaceLandmarksLarge
         landmarks_per_face = [klass(**{k: np.array(v) for k, v in d.items()}) for d in landmark_dicts]
 
-        landmarks_per_face = sorted(landmarks_per_face, key = lambda x: x.left_eye[0][0])
+        landmarks_per_face = sorted(landmarks_per_face, key=lambda x: x.left_eye[0][0])
         ims = []
         for landmarks in landmarks_per_face:
             ims.append(self.align(im, landmarks))
-        return landmarks_per_face, np.array(ims) if len(ims)>0 else np.zeros((0, self.desiredFaceHeight, self.desiredFaceWidth, 3))
+        return landmarks_per_face, np.array(ims) if len(ims) > 0 else np.zeros((0, self.desiredFaceHeight, self.desiredFaceWidth, 3))
 
     def align(self, image, landmarks: FaceLandmarks):
         #
@@ -153,7 +204,7 @@ class FaceAligner2:
         # compute center (x, y)-coordinates (i.e., the median point)
         # between the two eyes in the input image
         eyesCenter = ((leftEyeCenter[0] + rightEyeCenter[0]) // 2,
-            (leftEyeCenter[1] + rightEyeCenter[1]) // 2)
+                      (leftEyeCenter[1] + rightEyeCenter[1]) // 2)
 
         # grab the rotation matrix for rotating and scaling the face
         M = cv2.getRotationMatrix2D(eyesCenter, angle, scale)
@@ -167,43 +218,83 @@ class FaceAligner2:
         # apply the affine transformation
         (w, h) = (self.desiredFaceWidth, self.desiredFaceHeight)
         output = cv2.warpAffine(image, M, (w, h),
-            flags=cv2.INTER_CUBIC, borderMode=self.border_mode)
+                                flags=cv2.INTER_CUBIC, borderMode=self.border_mode)
 
         # return the aligned face
         return output
 
 
+class FaceAligner3:
+
+    def __init__(self, desired_left_eye_xy=(0.35, 0.35), desired_right_eye_xy=None, desired_width=256, desired_height=None, border_mode=cv2.BORDER_REPLICATE, model='small'):
+        # store the facial landmark predictor, desired output left
+        # eye position, and desired output face width + height
+        # self.predictor = predictor
+        # self.detector=detector
+        if desired_right_eye_xy is None:
+            desired_right_eye_xy = (1 - desired_left_eye_xy[0], desired_left_eye_xy[1])
+        if desired_height is None:
+            desired_height = desired_width
+        self.desired_left_eye_xy = np.asarray(desired_left_eye_xy) * (desired_width, desired_height)
+        self.desired_right_eye_xy = np.asarray(desired_right_eye_xy) * (desired_width, desired_height)
+        self.output_size = (desired_width, desired_height)
+        self.border_mode = border_mode
+        self.model = model
+
+    def __call__(self, im: np.ndarray) -> Tuple[Sequence[FaceLandmarks], np.ndarray]:
+
+        landmark_dicts = face_recognition.face_landmarks(im, model=self.model)
+
+        klass = FaceLandmarks if self.model == 'small' else FaceLandmarksLarge
+        landmarks_per_face = [klass(**{k: np.array(v) for k, v in d.items()}) for d in landmark_dicts]
+
+        landmarks_per_face = sorted(landmarks_per_face, key=lambda x: x.left_eye[0][0])
+        ims = []
+        for landmarks in landmarks_per_face:
+            ims.append(self.align(im, landmarks))
+        return landmarks_per_face, np.array(ims) if len(ims) > 0 else np.zeros((0, self.output_size[1], self.output_size[0], 3))
+
+    def align(self, image, landmarks: FaceLandmarks):
+
+        actual_left_eye_xy = np.mean(landmarks.left_eye, axis=0)
+        actual_right_eye_xy = np.mean(landmarks.right_eye, axis=0)
+        mat = compute_rotation_translation_affine_matrix(
+            src_point_a=actual_left_eye_xy,
+            src_point_b=actual_right_eye_xy,
+            dest_point_a=self.desired_left_eye_xy,
+            dest_point_b=self.desired_right_eye_xy,
+        )
+        output = cv2.warpAffine(image, mat, self.output_size, flags=cv2.INTER_CUBIC, borderMode=self.border_mode)
+        return output
 
 
 def crop_by_fraction(im, vcrop, hcrop):
-    return im[int(vcrop[0]*im.shape[0]):int(vcrop[1]*im.shape[0]), int(hcrop[0]*im.shape[1]):int(hcrop[1]*im.shape[1])]
+    return im[int(vcrop[0] * im.shape[0]):int(vcrop[1] * im.shape[0]), int(hcrop[0] * im.shape[1]):int(hcrop[1] * im.shape[1])]
 
 
 def add_fade_frame(img, frame_width=0.05, p_norm=2.):
-
-    r = (np.sum(np.power(np.meshgrid(np.linspace(-1, 1, img.shape[0]), np.linspace(-1, 1, img.shape[1])), p_norm), axis=0))**(1./p_norm)
-    fade_mult = (np.minimum(1, np.maximum(0, (1-r)/frame_width)))[:, :, None]
-    bordered_image = (img*fade_mult).astype(np.uint8)
+    r = (np.sum(np.power(np.meshgrid(np.linspace(-1, 1, img.shape[0]), np.linspace(-1, 1, img.shape[1])), p_norm), axis=0)) ** (1. / p_norm)
+    fade_mult = (np.minimum(1, np.maximum(0, (1 - r) / frame_width)))[:, :, None]
+    bordered_image = (img * fade_mult).astype(np.uint8)
     return bordered_image
 
 
-def correct_gamma(img, gamma = 3.):
-    table = (((np.arange(0, 256)/255.0)**(1/gamma))*255).astype(np.uint8)
+def correct_gamma(img, gamma=3.):
+    table = (((np.arange(0, 256) / 255.0) ** (1 / gamma)) * 255).astype(np.uint8)
     return cv2.LUT(img, table)
 
 
 def equalize_brightness(img, clipLimit=3., tileGridSize=(8, 8)):
-    lab= cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
     cl = clahe.apply(l)
-    limg = cv2.merge((cl,a,b))
+    limg = cv2.merge((cl, a, b))
     final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
     return final
 
 
 def face_aligning_iterator(face_aligner: FaceAligner2, camera: VideoCamera, image_preprocessor=None):
-
     if image_preprocessor is not None and not isinstance(image_preprocessor, (list, tuple)):
         image_preprocessor = [image_preprocessor]
 
@@ -231,7 +322,7 @@ def display_face_aligner(rgb_im, landmarks, faces, text=None):
     for i, (landmark, face) in enumerate(zip(landmarks, faces)):
         cv2.circle(display_img, tuple(landmark.left_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
         cv2.circle(display_img, tuple(landmark.right_eye.mean(axis=0).astype(int)), radius=5, thickness=2, color=(0, 0, 255))
-        display_img[-face.shape[0]:, -face.shape[1]*(i+1):display_img.shape[1]-face.shape[1]*i, ::-1] = face
+        display_img[-face.shape[0]:, -face.shape[1] * (i + 1):display_img.shape[1] - face.shape[1] * i, ::-1] = face
     if text is not None:
         cv2.putText(display_img, text, (20, 20), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 0))
     cv2.imshow('camera', display_img)

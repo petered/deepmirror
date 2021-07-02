@@ -77,7 +77,7 @@ def generator(inputs, image_size, c_dim, batch_size, is_train = True, reuse = Fa
     # image_size = FLAGS.output_size # 64 the output size of generator
     s2, s4, s8, s16 = int(image_size/2), int(image_size/4), int(image_size/8), int(image_size/16) # 32,16,8,4
     gf_dim = 32
-    # c_dim = FLAGS.c_dim # n_color 3
+    # c_dim = FLAGS.c_dim # n_color 3f
     # batch_size = FLAGS.batch_size # 64
 
     w_init = tf.random_normal_initializer(stddev=0.02)

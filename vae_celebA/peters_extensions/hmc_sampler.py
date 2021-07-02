@@ -7,7 +7,7 @@ from artemis.plotting.db_plotting import dbplot
 def hmc_leapfrog_step(energy_func, x, v, step_size=0.1, momentum_refreshment = 0., v_scale = 1.):
     """
     Note: incomplete as an MCMC sampler because there's no rejection step'
-    See reference http://www.mcmchandbook.net/HandbookChapter5.pdf
+    See reference http://www.mcmchandbook.net/HandbookChapter5.pdf Equations 5.18-5.20
 
     :param energy_func: A function mapping an (n_samples, ...) input to an (n_samples, ) vector of energies
     :param x: A state vector

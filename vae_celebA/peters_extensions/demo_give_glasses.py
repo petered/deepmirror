@@ -47,12 +47,15 @@ def enhance_eyebrows_(img, landmark, color=(0, 20, 20)):
 
 def demo_give_glasses():
 
-    # cam = VideoCamera(size=(640, 480), device=0, mode='bgr', hflip=True)
-    cam = VideoCamera(size=(480, 360), device=0, mode='bgr', hflip=True)
+    cam = VideoCamera(size=(640, 480), device=0, mode='bgr', hflip=True)
+    # cam = VideoCamera(size=(640, 480), device=3, mode='bgr', hflip=True)
+    # cam = VideoCamera(size=(480, 360), device=2, mode='bgr', hflip=True)
     face_det = FaceAligner2(model='large')
 
     for im in cam.iterator():
-
+        if im is None:
+            print('No image')
+            continue
         im = im.copy()
         landmarks, faces = face_det(im)
 

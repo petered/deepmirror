@@ -41,6 +41,9 @@ class VideoCamera(object):
 
         retval, im = self.camera.read()
 
+        if im is None:
+            return None
+
         if im.shape[:2] != (self.size[1], self.size[0]):
             im = cv2.resize(im, self.size)
 
